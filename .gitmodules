@@ -1,0 +1,3 @@
+[submodule "external/juntos"]
+	path = external/juntos
+	url = https://github.com/nmstory/juntos
