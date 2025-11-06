@@ -1,3 +1,1 @@
-namespace Simulator {
-
-} // namespace Simulator
+namespace Simulator {} // namespace Simulator
