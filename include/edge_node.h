@@ -13,7 +13,6 @@ class EdgeNode : public NodeInterface {
 	void run() override {
 		JuntosAdapter adapter;
 
-		// Connect to controller (container hostname resolves automatically in Docker)
 		Peer controller = adapter.addPeer("controller", 4000);
 
 		adapter.on_receive([](const Message &msg, const std::string &ip, uint16_t port) {
@@ -25,7 +24,6 @@ class EdgeNode : public NodeInterface {
 		adapter.start("0.0.0.0", 4001);
 		std::cout << "[Edge] Started on port 4001, connected to controller" << std::endl;
 
-		// Example: periodically send a heartbeat
 		int seq = 0;
 		while (true) {
 			Message msg = Message::Builder()
@@ -38,6 +36,7 @@ class EdgeNode : public NodeInterface {
 			std::cout << "[Edge] Sent heartbeat" << std::endl;
 
 			std::this_thread::sleep_for(std::chrono::seconds(2));
+			// todo: edge logic
 		}
 	}
 };

@@ -18,12 +18,12 @@ class Controller : public NodeInterface {
 					  << " | Payload: " << msg.payload() << std::endl;
 		});
 
-		adapter.start("0.0.0.0", 4000); // Listen for any incoming packets
+		adapter.start("0.0.0.0", 4000);
 		std::cout << "[Controller] Listening on port 4000..." << std::endl;
 
-		// Keep alive indefinitely (you’ll replace this with real loop logic)
 		while (true) {
 			std::this_thread::sleep_for(std::chrono::seconds(1));
+			// todo: controller logic
 		}
 	}
 };

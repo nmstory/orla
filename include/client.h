@@ -31,6 +31,7 @@ class Client : public NodeInterface {
 			adapter.send(msg, controller);
 			std::cout << "[Client] Sent request to controller" << std::endl;
 			std::this_thread::sleep_for(std::chrono::seconds(5));
+			// todo: complete client logic
 		}
 	}
 };
