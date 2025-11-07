@@ -53,7 +53,7 @@ class JuntosAdapter : public INetworkAdapter {
 				}
 			}
 		};
-		// TODO: threading, i.e: std::thread(receive_loop).detach();
+		std::thread(receive_loop).detach();
 	}
 
 	Peer addPeer(const std::string &peer_addr, uint16_t port) {

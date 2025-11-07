@@ -1,10 +1,12 @@
+#pragma once
 #include <common.h>
 
 namespace orla {
 enum class MessageType : uint8_t { Ping = 0,
 								   Pong,
 								   Data,
-								   Heartbeat };
+								   Heartbeat,
+								   Request };
 
 #pragma pack(push, 1)
 struct MessageHeader {

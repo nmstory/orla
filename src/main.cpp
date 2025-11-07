@@ -1,18 +1,12 @@
-#include <common.h>
-#include <network_adapter.h>
+#include <simulator.h>
 
-using orla::Message;
-using orla::MessageType;
+int main(int argc, char *argv[]) {
+	orla::Simulator simulator;
 
-int main() {
-	Message msg = Message::Builder()
-					  .type(MessageType::Data)
-					  .payload("Hello, world!")
-					  .sequence(42)
-					  .build();
-	orla::JuntosAdapter adapter;
-	adapter.start("edge", 4000);
-	Peer ctl = adapter.addPeer("controller", 4000);
-	adapter.send(msg, ctl);
+	if (simulator.init() != 0) {
+		return 1;
+	}
+
+	simulator.run();
 	return 0;
 }
