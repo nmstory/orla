@@ -18,11 +18,11 @@ class Simulator {
 		std::unique_ptr<NodeInterface> node;
 
 		if (role == "controller") {
-			node = std::make_unique<Controller>();
+			this->node = std::make_unique<Controller>();
 		} else if (role == "edge") {
-			node = std::make_unique<EdgeNode>();
+			this->node = std::make_unique<EdgeNode>();
 		} else if (role == "client") {
-			node = std::make_unique<Client>();
+			this->node = std::make_unique<Client>();
 		} else {
 			std::cerr << "Unknown ROLE: " << role << std::endl;
 			return 1;
@@ -31,8 +31,8 @@ class Simulator {
 	}
 
 	void run() {
-		if (node) {
-			node->run();
+		if (this->node) {
+			this->node->run();
 		} else {
 			std::cerr << "Simulator not initialized with a node." << std::endl;
 		}

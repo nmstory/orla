@@ -2,84 +2,66 @@ version: "3.9"
 
 services:
   controller:
-    build: .
     image: orla:latest
-    container_name: orla_controller
+    container_name: controller
     environment:
       ROLE: controller
       PORT: 4000
-      PROMETHEUS_PORT: 9100
+      MAX_LATENCY_MS: 100
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
     networks:
-      - orla-net
+      - orla_net
+    expose:
+      - "4000/udp"
     ports:
       - "4000:4000/udp"
-      - "9100:9100/tcp" # Prometheus metrics endpoint
-    depends_on:
-      - prometheus
-      - grafana
 
   edge1:
-    build: .
     image: orla:latest
-    container_name: orla_edge1
+    container_name: edge1
     environment:
       ROLE: edge
       PORT: 4001
-      CONTROLLER_ADDR: controller
-      LOSS_RATE: 0.05
       MAX_LATENCY_MS: 100
-      PROMETHEUS_PORT: 9101
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
+      CONTROLLER_ADDR: controller
     networks:
-      - orla-net
-    ports:
-      - "4001:4001/udp"
-      - "9101:9101/tcp"
+      - orla_net
+    expose:
+      - "4001/udp"
 
   edge2:
-    build: .
     image: orla:latest
-    container_name: orla_edge2
+    container_name: edge2
     environment:
       ROLE: edge
       PORT: 4002
+      MAX_LATENCY_MS: 100
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
       CONTROLLER_ADDR: controller
-      LOSS_RATE: 0.10
-      MAX_LATENCY_MS: 150
-      PROMETHEUS_PORT: 9102
     networks:
-      - orla-net
-    ports:
-      - "4002:4002/udp"
-      - "9102:9102/tcp"
+      - orla_net
+    expose:
+      - "4002/udp"
 
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-    ports:
-      - "9090:9090"
-    networks:
-      - orla-net
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
+  client:
+    image: orla:latest
+    container_name: client
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      ROLE: client
+      PORT: 4003
+      MAX_LATENCY_MS: 100
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
+      CONTROLLER_ADDR: controller
     networks:
-      - orla-net
-    depends_on:
-      - prometheus
+      - orla_net
+    expose:
+      - "4003/udp"
 
 networks:
-  orla-net:
+  orla_net:
     driver: bridge

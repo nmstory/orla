@@ -13,6 +13,9 @@ class EdgeNode : public NodeInterface {
 	void run() override {
 		JuntosAdapter adapter;
 
+		adapter.start("0.0.0.0", 4001);
+		std::cout << "[Edge] Started on port 4001" << std::endl;
+
 		Peer controller = adapter.addPeer("controller", 4000);
 
 		adapter.on_receive([](const Message &msg, const std::string &ip, uint16_t port) {
@@ -20,8 +23,6 @@ class EdgeNode : public NodeInterface {
 					  << " | Type: " << static_cast<int>(msg.type())
 					  << " | Payload: " << msg.payload() << std::endl;
 		});
-
-		adapter.start("0.0.0.0", 4001);
 		std::cout << "[Edge] Started on port 4001, connected to controller" << std::endl;
 
 		int seq = 0;
@@ -32,7 +33,7 @@ class EdgeNode : public NodeInterface {
 							  .sequence(seq++)
 							  .build();
 
-			adapter.send(msg, controller);
+			adapter.enqueue(msg, controller);
 			std::cout << "[Edge] Sent heartbeat" << std::endl;
 
 			std::this_thread::sleep_for(std::chrono::seconds(2));
