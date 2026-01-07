@@ -2,8 +2,8 @@
 #include <common.h>
 
 namespace orla {
-enum class MessageType : uint8_t { Ping = 0,
-								   Pong,
+enum class MessageType : uint8_t { ClientConnectReqPing = 0,
+								   ClientConnectReqPong,
 								   Data,
 								   Heartbeat,
 								   Request };
@@ -64,7 +64,7 @@ class Message {
 
 	// Using builder pattern for easier construction
 	class Builder {
-		MessageType type_ = MessageType::Ping;
+		MessageType type_ = MessageType::ClientConnectReqPing;
 		std::string payload_;
 		uint32_t sequence_ = 0;
 
@@ -87,7 +87,7 @@ class Message {
 	};
 
   private:
-	MessageHeader header_{0, 0, 0, MessageType::Ping};
+	MessageHeader header_{0, 0, 0, MessageType::ConnectRequestPing};
 	std::string payload_;
 };
 

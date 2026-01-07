@@ -16,9 +16,9 @@ class EdgeNode : public NodeInterface {
 		adapter.start("0.0.0.0", 4001);
 		std::cout << "[Edge] Started on port 4001" << std::endl;
 
-		Peer controller = adapter.addPeer("controller", 4000);
+		Peer controller = adapter.setupPeer("controller", 4000);
 
-		adapter.on_receive([](const Message &msg, const std::string &ip, uint16_t port) {
+		adapter.on_receive([](const Message &msg, const std::string &ip, const uint16_t port) {
 			std::cout << "[Edge] Received from " << ip << ":" << port
 					  << " | Type: " << static_cast<int>(msg.type())
 					  << " | Payload: " << msg.payload() << std::endl;

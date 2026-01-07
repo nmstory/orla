@@ -91,8 +91,8 @@ class JuntosAdapter : public INetworkAdapter {
 		worker_ = std::thread([this] { this->workerLoop(); });
 	}
 
-	Peer addPeer(const std::string &peer_addr, uint16_t port) {
-		return session_->addPeer(peer_addr, port);
+	Peer setupPeer(const std::string &peer_addr, uint16_t port) {
+		return session_->setupPeer(peer_addr, port);
 	}
 
 	~JuntosAdapter() {
