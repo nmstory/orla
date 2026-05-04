@@ -1,6 +1,7 @@
 #pragma once
 #include "../external/juntos/include/network_handler.h"
 #include "../external/juntos/include/session_linux.h"
+#include "config.h"
 #include "message.h"
 #include <chrono>
 #include <condition_variable>
@@ -32,19 +33,19 @@ class INetworkAdapter {
 
 class JuntosAdapter : public INetworkAdapter {
   public:
-	JuntosAdapter() : session_(nullptr), loss_rate_(0.0), max_latency_ms_(0), reorder_prob_(0.0),
+	JuntosAdapter() : session_(nullptr),
 					  rng_(std::random_device{}()), dist01_(0.0, 1.0), stopped_(false) {}
 
 	void enqueue(const Message &msg, const Peer &peer) override {
 		auto buf = msg.serialize();
 		std::vector<uint8_t> raw(buf.begin(), buf.end());
 
-		if (dist01_(rng_) < loss_rate_) {
+		if (dist01_(rng_) < config::LOSS_RATE) {
 			return; // packet dropped
 		}
 
 		// add random latency
-		int ms = max_latency_ms_ > 0 ? std::uniform_int_distribution<int>(0, max_latency_ms_)(rng_) : 0;
+		int ms = config::MAX_LATENCY_MS > 0 ? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(rng_) : 0;
 		auto deliver_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
 
 		{ // push to pending queue
@@ -61,11 +62,11 @@ class JuntosAdapter : public INetworkAdapter {
 
 	void start(std::string hostname, uint16_t port) override {
 		if (char *e = std::getenv("LOSS_RATE"))
-			loss_rate_ = std::stod(e);
+			config::LOSS_RATE = std::stod(e);
 		if (char *e = std::getenv("MAX_LATENCY_MS"))
-			max_latency_ms_ = std::atoi(e);
+			config::MAX_LATENCY_MS = std::atoi(e);
 		if (char *e = std::getenv("REORDER_PROB"))
-			reorder_prob_ = std::stod(e);
+			config::REORDER_PROB = std::stod(e);
 
 		if (!session_) {
 			session_ = new LinuxSession();
@@ -76,11 +77,16 @@ class JuntosAdapter : public INetworkAdapter {
 			while (!stopped_) {
 				auto [success, data, sender] = recvData(session_->getSocketFD());
 				if (success && recv_callback_) {
-					Message msg = Message::deserialize(reinterpret_cast<const uint8_t *>(data.data()), data.size());
-					char ip[INET_ADDRSTRLEN];
-					inet_ntop(AF_INET, &(sender.sin_addr), ip, INET_ADDRSTRLEN);
-					uint16_t sender_port = ntohs(sender.sin_port);
-					recv_callback_(msg, std::string(ip), sender_port);
+					std::cout << "Received " << data.size() << std::endl;
+					try{
+						Message msg = Message::deserialize(reinterpret_cast<const uint8_t *>(data.data()), data.size());
+						char ip[INET_ADDRSTRLEN];
+						inet_ntop(AF_INET, &(sender.sin_addr), ip, INET_ADDRSTRLEN);
+						uint16_t sender_port = ntohs(sender.sin_port);
+						recv_callback_(msg, std::string(ip), sender_port);
+					} catch (const std::exception &e){
+						std::cerr << "Deserialise failed: " << e.what() << std::endl;
+					}
 				}
 				std::this_thread::yield(); // TODO: cleanup blocking tech
 			}
@@ -110,10 +116,6 @@ class JuntosAdapter : public INetworkAdapter {
   private:
 	std::function<void(const Message &, const std::string &, uint16_t)> recv_callback_;
 	LinuxSession *session_;
-
-	double loss_rate_;
-	int max_latency_ms_;
-	double reorder_prob_;
 
 	std::mt19937 rng_;
 	std::uniform_real_distribution<double> dist01_;
@@ -151,6 +153,13 @@ class JuntosAdapter : public INetworkAdapter {
 				if (session_) {
 					int sock = session_->getSocketFD();
 					std::span<const std::byte> payload(reinterpret_cast<const std::byte *>(send_pkt.buf.data()), send_pkt.buf.size());
+					char dest_ip[INET_ADDRSTRLEN];
+					inet_ntop(AF_INET, &send_pkt.addr.sin_addr, dest_ip, INET_ADDRSTRLEN);
+					std::cout << "[Worker] Sending " << payload.size() << " bytes to "
+							<< dest_ip << ":" << ntohs(send_pkt.addr.sin_port)
+							<< " on sock " << sock << std::endl;
+					sendData<int>(sock, send_pkt.addr, payload, payload.size());
+
 					sendData<int>(sock, send_pkt.addr, payload, payload.size());
 				}
 				lk.lock();

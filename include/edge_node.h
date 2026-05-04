@@ -9,20 +9,33 @@
 namespace orla {
 
 class EdgeNode : public NodeInterface {
-  public:
+public:
 	void run() override {
-		JuntosAdapter adapter;
+		uint16_t port = 4001; // init to default
+		if (char *e = std::getenv("PORT")) port = std::atoi(e);
+		adapter.start("0.0.0.0", port);
 
-		adapter.start("0.0.0.0", 4001);
-		std::cout << "[Edge] Started on port 4001" << std::endl;
+		std::cout << "[Edge] Started on port " << port << std::endl;
 
 		Peer controller = adapter.setupPeer("controller", 4000);
 
-		adapter.on_receive([](const Message &msg, const std::string &ip, const uint16_t port) {
+		adapter.on_receive([this](const Message &msg, const std::string &ip, const uint16_t port) {
 			std::cout << "[Edge] Received from " << ip << ":" << port
 					  << " | Type: " << static_cast<int>(msg.type())
 					  << " | Payload: " << msg.payload() << std::endl;
+
+
+			if (msg.type() == MessageType::Request) {
+				Peer client = adapter.setupPeer(ip, port);
+				Message response = Message::Builder()
+					.type(MessageType::Data)
+					.payload("processed: " + msg.payload())
+					.sequence(msg.sequence())
+					.build();
+				adapter.enqueue(response, client);
+			}
 		});
+
 		std::cout << "[Edge] Started on port 4001, connected to controller" << std::endl;
 
 		int seq = 0;
@@ -40,6 +53,7 @@ class EdgeNode : public NodeInterface {
 			// todo: edge logic
 		}
 	}
+private:
+	JuntosAdapter adapter;
 };
-
 } // namespace orla

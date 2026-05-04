@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   controller:
+    build: .
     image: orla:latest
     container_name: controller
     environment:

@@ -2,7 +2,8 @@
 #include <common.h>
 
 namespace orla {
-enum class MessageType : uint8_t { ClientConnectReqPing = 0,
+enum class MessageType : uint8_t { Invalid = 0,
+								   ClientConnectReqPing,
 								   ClientConnectReqPong,
 								   Data,
 								   Heartbeat,
@@ -87,7 +88,7 @@ class Message {
 	};
 
   private:
-	MessageHeader header_{0, 0, 0, MessageType::ConnectRequestPing};
+	MessageHeader header_{0, 0, 0, MessageType::Invalid};
 	std::string payload_;
 };
 
