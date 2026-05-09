@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  controller:
+    build: .
+    image: orla:latest
+    container_name: controller
+    environment:
+      ROLE: controller
+      PORT: 4000
+      MAX_LATENCY_MS: 100
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
+    networks:
+      - orla_net
+    expose:
+      - "4000/udp"
+    ports:
+      - "4000:4000/udp"
+
+  edge1:
+    image: orla:latest
+    container_name: edge1
+    environment:
+      ROLE: edge
+      PORT: 4001
+      MAX_LATENCY_MS: 100
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
+      CONTROLLER_ADDR: controller
+    networks:
+      - orla_net
+    expose:
+      - "4001/udp"
+
+  edge2:
+    image: orla:latest
+    container_name: edge2
+    environment:
+      ROLE: edge
+      PORT: 4002
+      MAX_LATENCY_MS: 100
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
+      CONTROLLER_ADDR: controller
+    networks:
+      - orla_net
+    expose:
+      - "4002/udp"
+
+  client:
+    image: orla:latest
+    container_name: client
+    environment:
+      ROLE: client
+      PORT: 4003
+      MAX_LATENCY_MS: 100
+      LOSS_RATE: 0.1
+      REORDER_PROB: 0.05
+      CONTROLLER_ADDR: controller
+    networks:
+      - orla_net
+    expose:
+      - "4003/udp"
+
+networks:
+  orla_net:
+    driver: bridge
