@@ -5,6 +5,7 @@
 #include <message.h>
 #include <network_adapter.h>
 #include <thread>
+#include <vector>
 
 namespace orla {
 
@@ -25,14 +26,9 @@ public:
 					  << " | Payload: " << msg.payload() << std::endl;
 
 
-			if (msg.type() == MessageType::Request) {
+			if (msg.type() == MessageType::ClientAssigned) {
 				Peer client = adapter.setupPeer(ip, port);
-				Message response = Message::Builder()
-					.type(MessageType::Data)
-					.payload("processed: " + msg.payload())
-					.sequence(msg.sequence())
-					.build();
-				adapter.enqueue(response, client);
+				clients.push_back(client);
 			}
 		});
 
@@ -42,12 +38,13 @@ public:
 		while (true) {
 			Message msg = Message::Builder()
 							  .type(MessageType::Heartbeat)
-							  .payload("Edge alive")
+							  .payload(std::to_string(clients.size()))
 							  .sequence(seq++)
 							  .build();
 
 			adapter.enqueue(msg, controller);
-			std::cout << "[Edge] Sent heartbeat" << std::endl;
+			std::cout << "[Edge] Sent heartbeat that the number of connected clients are " << clients.size() << std::endl;
+
 
 			std::this_thread::sleep_for(std::chrono::seconds(2));
 			// todo: edge logic
@@ -55,5 +52,6 @@ public:
 	}
 private:
 	JuntosAdapter adapter;
+	std::vector<Peer> clients;
 };
 } // namespace orla

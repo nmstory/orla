@@ -5,9 +5,9 @@ namespace orla {
 enum class MessageType : uint8_t { Invalid = 0,
 								   ClientConnectReqPing,
 								   ClientConnectReqPong,
+								   ClientAssigned,
 								   Data,
-								   Heartbeat,
-								   Request };
+								   Heartbeat};
 
 #pragma pack(push, 1)
 struct MessageHeader {
