@@ -4,6 +4,7 @@
 #include <iostream>
 #include <message.h>
 #include <network_adapter.h>
+#include <random>
 #include <thread>
 
 namespace orla {
@@ -13,17 +14,17 @@ public:
 	void run() override {
 		uint16_t port = 4002; // init to default
 		if (char *e = std::getenv("PORT")) port = std::atoi(e);
-		adapter.start("0.0.0.0", port);
+		m_Adapter.start("0.0.0.0", port);
 		std::cout << "[Client] Started on port " << port << std::endl;
 
-		Peer controller = adapter.setupPeer("controller", 4000);
+		Peer controller = m_Adapter.setupPeer("controller", 4000);
 
-		adapter.on_receive([](const Message &msg, const std::string &ip, const uint16_t port) {
+		m_Adapter.on_receive([](const Message &msg, const std::string &ip, const uint16_t port) {
 			std::cout << "[Client] Response from " << ip << ":" << port
 					  << " | Payload: " << msg.payload() << std::endl;
 		});
 
-		adapter.on_receive([this](const Message &msg, const std::string &ip, const uint16_t port) {
+		m_Adapter.on_receive([this](const Message &msg, const std::string &ip, const uint16_t port) {
 			if (msg.type() == MessageType::ClientConnectReqPong) {
 				// response from controller to client to matchmake
 				// parse "172.18.0.3:4001"
@@ -32,41 +33,52 @@ public:
 				std::string edge_ip = payload.substr(0, colon);
 				uint16_t edge_port = std::stoi(payload.substr(colon + 1));
 
-				workerEdge = new Peer(adapter.setupPeer(edge_ip, edge_port));
-
+				m_WorkerEdge = new Peer(m_Adapter.setupPeer(edge_ip, edge_port));
+			}
+			else if (msg.type() == MessageType::ClientWorkResult) {
+				WorkResult result;
+				std::memcpy(&result, msg.payload().data(), sizeof(result));
+				std::cout << "[Client] Work complete task_id=" << result.task_id << std::endl;
 			}
 		});
 
 		int seq = 100;
 		while (true) {
-			if (workerEdge) {
-				Message msg = Message::Builder()
-					.type(MessageType::ClientWorkRequest)
-					.payload("work")
-					.sequence(seq++)
-					.build();
-				adapter.enqueue(msg, *workerEdge);  
-				std::cout << "[Client] Sent request to edge" << std::endl;
+			if (m_WorkerEdge) {
+				sendWorkRequest(seq++);
 			} else {
 				Message msg = Message::Builder()
 					.type(MessageType::ClientConnectReqPing)
 					.sequence(seq++)
 					.build();
-				adapter.enqueue(msg, controller);
+				m_Adapter.enqueue(msg, controller);
 				std::cout << "[Client] Sent ping to controller" << std::endl;
 			}
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
-
 	}
 
-	// todo: better name!
-	//Peer parsePongCreatePeer(std::string s) const {
-		// todo: take the payload and understand the ip and port, then create peer
-	//}
 private:
-	JuntosAdapter adapter;
-	Peer* workerEdge;
+	void sendWorkRequest(int seq) {
+		WorkRequest req{m_NextTaskId++, m_TaskDurationDistribution(m_Rng)};
+		std::string payload(sizeof(req), '\0');
+		std::memcpy(payload.data(), &req, sizeof(req));
+
+		Message msg = Message::Builder()
+			.type(MessageType::ClientWorkRequest)
+			.payload(std::move(payload))
+			.sequence(seq)
+			.build();
+		m_Adapter.enqueue(msg, *m_WorkerEdge);
+		std::cout << "[Client] Sent work request task_id=" << req.task_id
+				  << " duration_ms=" << req.duration_ms << std::endl;
+	}
+
+	JuntosAdapter m_Adapter;
+	Peer* m_WorkerEdge = nullptr;
+	uint32_t m_NextTaskId = 1;
+	std::mt19937 m_Rng{std::random_device{}()};
+	std::uniform_int_distribution<uint32_t> m_TaskDurationDistribution{200, 2000};
 };
 
 } // namespace orla

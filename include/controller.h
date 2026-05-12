@@ -33,15 +33,15 @@ struct Edge {
 class Controller : public NodeInterface {
   public:
 	void run() override {
-		adapter.on_receive([this](const Message &msg, const std::string &ip, uint16_t port) {
+		m_Adapter.on_receive([this](const Message &msg, const std::string &ip, uint16_t port) {
 			if (msg.type() == MessageType::Heartbeat) {
 				auto it = getEdge(ip, port);
-				if (it == alive_edges.end())
-					alive_edges.push_back(adapter.setupPeer(ip, port));
+				if (it == m_AliveEdges.end())
+					m_AliveEdges.push_back(m_Adapter.setupPeer(ip, port));
 				removeDeadEdges();
 			} else if (msg.type() == MessageType::HeartbeatAck) {
 				auto it = getEdge(ip, port);
-				if (it != alive_edges.end()) {
+				if (it != m_AliveEdges.end()) {
 					int64_t latencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(
 						std::chrono::system_clock::now() - it->m_LastPingSentAt).count();
 					uint8_t clientCount = std::stoi(msg.payload());
@@ -50,9 +50,9 @@ class Controller : public NodeInterface {
 				}
 			} else if (msg.type() == MessageType::ClientConnectReqPing) {
 				auto it = getBestEdge();
-				if (it != alive_edges.end() && it->m_Score >= config::SCALE_UP_THRESHOLD)
+				if (it != m_AliveEdges.end() && it->m_Score >= config::SCALE_UP_THRESHOLD)
 					spawnEdge();
-				if (it != alive_edges.end()) {
+				if (it != m_AliveEdges.end()) {
 					char ip_buf[INET_ADDRSTRLEN];
 					inet_ntop(AF_INET, &it->m_Peer.sendAddr.sin_addr, ip_buf, INET_ADDRSTRLEN);
 					uint16_t edge_port = ntohs(it->m_Peer.sendAddr.sin_port);
@@ -62,7 +62,7 @@ class Controller : public NodeInterface {
 						.payload(std::string(ip_buf) + ":" + std::to_string(edge_port))
 						.sequence(msg.sequence())
 						.build();
-					adapter.enqueue(response, adapter.setupPeer(ip, port));
+					m_Adapter.enqueue(response, m_Adapter.setupPeer(ip, port));
 				} else {
 					std::cerr << "[Controller] No known edges to allocate client to." << std::endl;
 				}
@@ -71,34 +71,34 @@ class Controller : public NodeInterface {
 
 		uint16_t port = 4000;
 		if (char *e = std::getenv("PORT")) port = std::atoi(e);
-		adapter.start("0.0.0.0", port);
+		m_Adapter.start("0.0.0.0", port);
 		std::cout << "[Controller] Listening on port " << port << std::endl;
 
 		while (true) {
 			std::this_thread::sleep_for(std::chrono::seconds(2));
-			for (auto &edge : alive_edges) {
+			for (auto &edge : m_AliveEdges) {
 				edge.m_LastPingSentAt = std::chrono::system_clock::now();
-				adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), edge.m_Peer);
+				m_Adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), edge.m_Peer);
 			}
 		}
 	}
 
   private:
 	std::vector<Edge>::iterator getEdge(const std::string &ip, uint16_t port) {
-		return std::find_if(alive_edges.begin(), alive_edges.end(), [&](const Edge &p) {
+		return std::find_if(m_AliveEdges.begin(), m_AliveEdges.end(), [&](const Edge &p) {
 			return p.m_Peer.sendAddr.sin_port == htons(port) &&
 				   p.m_Peer.sendAddr.sin_addr.s_addr == inet_addr(ip.c_str());
 		});
 	}
 
 	std::vector<Edge>::iterator getBestEdge() {
-		return std::min_element(alive_edges.begin(), alive_edges.end(), [](const Edge &a, const Edge &b) {
+		return std::min_element(m_AliveEdges.begin(), m_AliveEdges.end(), [](const Edge &a, const Edge &b) {
 			return a.m_Score < b.m_Score;
 		});
 	}
 
 	void removeDeadEdges() {
-		std::erase_if(alive_edges, [](const Edge &p) {
+		std::erase_if(m_AliveEdges, [](const Edge &p) {
 			return std::chrono::system_clock::now() - p.m_LastAckAt >
 				   std::chrono::seconds(orla::config::HEARTBEAT_TIMEOUT_S);
 		});
@@ -111,8 +111,8 @@ class Controller : public NodeInterface {
 		std::cout << "[Controller] Spawned new edge on port " << m_NextEdgePort - 1 << std::endl;
 	}
 
-	JuntosAdapter adapter{};
-	std::vector<Edge> alive_edges{};
+	JuntosAdapter m_Adapter{};
+	std::vector<Edge> m_AliveEdges{};
 	uint16_t m_NextEdgePort = 4001;
 };
 

@@ -33,31 +33,31 @@ class INetworkAdapter {
 
 class JuntosAdapter : public INetworkAdapter {
   public:
-	JuntosAdapter() : session_(nullptr),
-					  rng_(std::random_device{}()), dist01_(0.0, 1.0), stopped_(false) {}
+	JuntosAdapter() : m_Session(nullptr),
+					  m_Rng(std::random_device{}()), m_Dist01(0.0, 1.0), m_Stopped(false) {}
 
 	void enqueue(const Message &msg, const Peer &peer) override {
 		auto buf = msg.serialize();
 		std::vector<uint8_t> raw(buf.begin(), buf.end());
 
-		if (dist01_(rng_) < config::LOSS_RATE) {
+		if (m_Dist01(m_Rng) < config::LOSS_RATE) {
 			return; // packet dropped
 		}
 
 		// add random latency
-		int ms = config::MAX_LATENCY_MS > 0 ? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(rng_) : 0;
+		int ms = config::MAX_LATENCY_MS > 0 ? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(m_Rng) : 0;
 		auto deliver_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
 
 		{ // push to pending queue
-			std::lock_guard<std::mutex> lk(mutex_);
-			pending_.push(Pending{deliver_at, peer.sendAddr, std::move(raw)});
-			cv_.notify_one();
+			std::lock_guard<std::mutex> lk(m_Mutex);
+			m_Pending.push(Pending{deliver_at, peer.sendAddr, std::move(raw)});
+			m_Cv.notify_one();
 		}
 	}
 
 	void on_receive(
 		std::function<void(const Message &, const std::string &, uint16_t)> callback) override {
-		recv_callback_ = std::move(callback);
+		m_RecvCallback = std::move(callback);
 	}
 
 	void start(std::string hostname, uint16_t port) override {
@@ -68,22 +68,22 @@ class JuntosAdapter : public INetworkAdapter {
 		if (char *e = std::getenv("REORDER_PROB"))
 			config::REORDER_PROB = std::stod(e);
 
-		if (!session_) {
-			session_ = new LinuxSession();
+		if (!m_Session) {
+			m_Session = new LinuxSession();
 		}
-		session_->initSessionSolo(hostname, port);
+		m_Session->initSessionSolo(hostname, port);
 
 		auto receive_loop = [this]() {
-			while (!stopped_) {
-				auto [success, data, sender] = recvData(session_->getSocketFD());
-				if (success && recv_callback_) {
+			while (!m_Stopped) {
+				auto [success, data, sender] = recvData(m_Session->getSocketFD());
+				if (success && m_RecvCallback) {
 					std::cout << "Received " << data.size() << std::endl;
 					try{
 						Message msg = Message::deserialize(reinterpret_cast<const uint8_t *>(data.data()), data.size());
 						char ip[INET_ADDRSTRLEN];
 						inet_ntop(AF_INET, &(sender.sin_addr), ip, INET_ADDRSTRLEN);
 						uint16_t sender_port = ntohs(sender.sin_port);
-						recv_callback_(msg, std::string(ip), sender_port);
+						m_RecvCallback(msg, std::string(ip), sender_port);
 					} catch (const std::exception &e){
 						std::cerr << "Deserialise failed: " << e.what() << std::endl;
 					}
@@ -94,31 +94,31 @@ class JuntosAdapter : public INetworkAdapter {
 		std::thread(receive_loop).detach();
 
 		// sender worker
-		worker_ = std::thread([this] { this->workerLoop(); });
+		m_Worker = std::thread([this] { this->workerLoop(); });
 	}
 
 	Peer setupPeer(const std::string &peer_addr, uint16_t port) {
-		return session_->setupPeer(peer_addr, port);
+		return m_Session->setupPeer(peer_addr, port);
 	}
 
 	~JuntosAdapter() {
 		// stop worker
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
-			stopped_ = true;
-			cv_.notify_one();
+			std::lock_guard<std::mutex> lk(m_Mutex);
+			m_Stopped = true;
+			m_Cv.notify_one();
 		}
-		if (worker_.joinable())
-			worker_.join();
-		delete session_;
+		if (m_Worker.joinable())
+			m_Worker.join();
+		delete m_Session;
 	}
 
   private:
-	std::function<void(const Message &, const std::string &, uint16_t)> recv_callback_;
-	LinuxSession *session_;
+	std::function<void(const Message &, const std::string &, uint16_t)> m_RecvCallback;
+	LinuxSession *m_Session;
 
-	std::mt19937 rng_;
-	std::uniform_real_distribution<double> dist01_;
+	std::mt19937 m_Rng;
+	std::uniform_real_distribution<double> m_Dist01;
 
 	struct Pending {
 		std::chrono::steady_clock::time_point when;
@@ -127,31 +127,31 @@ class JuntosAdapter : public INetworkAdapter {
 		bool operator>(Pending const &o) const { return when > o.when; } // for priority_queue
 	};
 
-	std::priority_queue<Pending, std::vector<Pending>, std::greater<Pending>> pending_;
-	std::mutex mutex_;
-	std::condition_variable cv_;
-	std::thread worker_;
-	bool stopped_;
+	std::priority_queue<Pending, std::vector<Pending>, std::greater<Pending>> m_Pending;
+	std::mutex m_Mutex;
+	std::condition_variable m_Cv;
+	std::thread m_Worker;
+	bool m_Stopped;
 
 	void workerLoop() {
-		std::unique_lock<std::mutex> lk(mutex_);
-		while (!stopped_) {
-			if (pending_.empty()) {
-				cv_.wait(lk, [this] { return stopped_ || !pending_.empty(); });
-				if (stopped_)
+		std::unique_lock<std::mutex> lk(m_Mutex);
+		while (!m_Stopped) {
+			if (m_Pending.empty()) {
+				m_Cv.wait(lk, [this] { return m_Stopped || !m_Pending.empty(); });
+				if (m_Stopped)
 					break;
 			}
 
-			auto &pkt = pending_.top();
+			auto &pkt = m_Pending.top();
 			auto now = std::chrono::steady_clock::now();
 			if (pkt.when > now)
-				cv_.wait_until(lk, pkt.when);
+				m_Cv.wait_until(lk, pkt.when);
 			else {
-				Pending send_pkt = std::move(const_cast<Pending &>(pending_.top()));
-				pending_.pop();
+				Pending send_pkt = std::move(const_cast<Pending &>(m_Pending.top()));
+				m_Pending.pop();
 				lk.unlock();
-				if (session_) {
-					int sock = session_->getSocketFD();
+				if (m_Session) {
+					int sock = m_Session->getSocketFD();
 					std::span<const std::byte> payload(reinterpret_cast<const std::byte *>(send_pkt.buf.data()), send_pkt.buf.size());
 					char dest_ip[INET_ADDRSTRLEN];
 					inet_ntop(AF_INET, &send_pkt.addr.sin_addr, dest_ip, INET_ADDRSTRLEN);
