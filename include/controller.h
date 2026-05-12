@@ -80,6 +80,7 @@ class Controller : public NodeInterface {
 				edge.m_LastPingSentAt = std::chrono::system_clock::now();
 				m_Adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), edge.m_Peer);
 			}
+			checkScaleDown();
 		}
 	}
 
@@ -109,6 +110,26 @@ class Controller : public NodeInterface {
 						  "-e ROLE=edge -e PORT=" + std::to_string(m_NextEdgePort++) + " orla:latest";
 		std::system(cmd.c_str());
 		std::cout << "[Controller] Spawned new edge on port " << m_NextEdgePort - 1 << std::endl;
+	}
+
+	void killEdge(std::vector<Edge>::iterator it) {
+		uint16_t port    = ntohs(it->m_Peer.sendAddr.sin_port);
+		std::string cmd  = "docker stop $(docker ps -q --filter publish=" + std::to_string(port) + ") 2>/dev/null";
+		std::system(cmd.c_str());
+		std::cout << "[Controller] Killed edge on port " << port << std::endl;
+		m_AliveEdges.erase(it);
+	}
+
+	void checkScaleDown() {
+		if (m_AliveEdges.size() <= 1) return;
+		bool allIdle = std::all_of(m_AliveEdges.begin(), m_AliveEdges.end(), [](const Edge &e) {
+			return e.m_Score < config::SCALE_DOWN_THRESHOLD;
+		});
+		if (!allIdle) return;
+		auto it = std::min_element(m_AliveEdges.begin(), m_AliveEdges.end(), [](const Edge &a, const Edge &b) {
+			return a.m_Score < b.m_Score;
+		});
+		killEdge(it);
 	}
 
 	JuntosAdapter m_Adapter{};
