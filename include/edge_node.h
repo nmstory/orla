@@ -31,8 +31,12 @@ public:
 					.payload(std::to_string(clients.size()))
 					.build();
 				adapter.enqueue(ack, controller);
-			} else if (msg.type() == MessageType::ClientAssigned) {
+			} 
+			else if (msg.type() == MessageType::ClientAssigned) {
 				clients.push_back(adapter.setupPeer(ip, port));
+			}
+			else if (msg.type() == MessageType::ClientWorkRequest) {
+				std::cout << "[Edge] Received work to be done from the client" << std::endl;
 			}
 		});
 

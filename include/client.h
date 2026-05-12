@@ -41,7 +41,7 @@ public:
 		while (true) {
 			if (workerEdge) {
 				Message msg = Message::Builder()
-					.type(MessageType::Request)
+					.type(MessageType::ClientWorkRequest)
 					.payload("work")
 					.sequence(seq++)
 					.build();

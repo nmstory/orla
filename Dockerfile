@@ -45,4 +45,3 @@ ENV ROLE=edge \
     PROMETHEUS_PORT=9090
 
 ENTRYPOINT ["/usr/local/bin/orla"]
-CMD ["--role=${ROLE}", "--port=${PORT}", "--controller=${CONTROLLER_ADDR}"]
