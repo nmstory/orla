@@ -7,9 +7,21 @@ enum class MessageType : uint8_t { Invalid = 0,
 								   ClientConnectReqPong,
 								   ClientAssigned,
 								   ClientWorkRequest,
+								   ClientWorkResult,
 								   Data,
 								   Heartbeat,
 								   HeartbeatAck};
+
+#pragma pack(push, 1)
+struct WorkRequest {
+	const uint32_t task_id;      // client-assigned, for correlation
+	const uint32_t duration_ms;  // simulated compute time
+};
+
+struct WorkResult {
+	uint32_t task_id;      // echoed back from WorkRequest
+};
+#pragma pack(pop)
 
 #pragma pack(push, 1)
 struct MessageHeader {
@@ -23,22 +35,22 @@ struct MessageHeader {
 class Message {
   public:
 	Message(MessageType t, std::string payload, uint32_t seq = 0)
-		: header_{seq, static_cast<uint32_t>(payload.size()), 0, t},
-		  payload_(std::move(payload)) {
-		header_.checksum =
-			crc32(0, reinterpret_cast<const Bytef *>(payload_.data()),
-				  payload_.size());
+		: m_Header{seq, static_cast<uint32_t>(payload.size()), 0, t},
+		  m_Payload(std::move(payload)) {
+		m_Header.checksum =
+			crc32(0, reinterpret_cast<const Bytef *>(m_Payload.data()),
+				  m_Payload.size());
 	}
 
-	MessageType type() const noexcept { return header_.type; }
-	uint32_t sequence() const noexcept { return header_.sequence; }
-	const std::string &payload() const noexcept { return payload_; }
+	MessageType type() const noexcept { return m_Header.type; }
+	uint32_t sequence() const noexcept { return m_Header.sequence; }
+	const std::string &payload() const noexcept { return m_Payload; }
 
 	std::vector<uint8_t> serialize() const {
-		std::vector<uint8_t> buf(sizeof(header_) + payload_.size());
-		std::memcpy(buf.data(), &header_, sizeof(header_));
-		std::memcpy(buf.data() + sizeof(header_), payload_.data(),
-					payload_.size());
+		std::vector<uint8_t> buf(sizeof(m_Header) + m_Payload.size());
+		std::memcpy(buf.data(), &m_Header, sizeof(m_Header));
+		std::memcpy(buf.data() + sizeof(m_Header), m_Payload.data(),
+					m_Payload.size());
 		return buf;
 	}
 
@@ -67,31 +79,31 @@ class Message {
 
 	// Using builder pattern for easier construction
 	class Builder {
-		MessageType type_ = MessageType::ClientConnectReqPing;
-		std::string payload_;
-		uint32_t sequence_ = 0;
+		MessageType m_Type = MessageType::ClientConnectReqPing;
+		std::string m_Payload;
+		uint32_t m_Sequence = 0;
 
 	  public:
 		Builder &type(MessageType t) {
-			type_ = t;
+			m_Type = t;
 			return *this;
 		}
 		Builder &payload(std::string p) {
-			payload_ = std::move(p);
+			m_Payload = std::move(p);
 			return *this;
 		}
 		Builder &sequence(uint32_t s) {
-			sequence_ = s;
+			m_Sequence = s;
 			return *this;
 		}
 		Message build() {
-			return Message(type_, std::move(payload_), sequence_);
+			return Message(m_Type, std::move(m_Payload), m_Sequence);
 		}
 	};
 
   private:
-	MessageHeader header_{0, 0, 0, MessageType::Invalid};
-	std::string payload_;
+	MessageHeader m_Header{0, 0, 0, MessageType::Invalid};
+	std::string m_Payload;
 };
 
 } // namespace orla
