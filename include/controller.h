@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <config.h>
+#include <cstdlib>
 #include <iostream>
 #include <message.h>
 #include <network_adapter.h>
@@ -49,6 +50,8 @@ class Controller : public NodeInterface {
 				}
 			} else if (msg.type() == MessageType::ClientConnectReqPing) {
 				auto it = getBestEdge();
+				if (it != alive_edges.end() && it->m_Score >= config::SCALE_UP_THRESHOLD)
+					spawnEdge();
 				if (it != alive_edges.end()) {
 					char ip_buf[INET_ADDRSTRLEN];
 					inet_ntop(AF_INET, &it->m_Peer.sendAddr.sin_addr, ip_buf, INET_ADDRSTRLEN);
@@ -101,8 +104,16 @@ class Controller : public NodeInterface {
 		});
 	}
 
+	void spawnEdge() {
+		std::string cmd = "docker run -d --network orla_orla_net "
+						  "-e ROLE=edge -e PORT=" + std::to_string(m_NextEdgePort++) + " orla:latest";
+		std::system(cmd.c_str());
+		std::cout << "[Controller] Spawned new edge on port " << m_NextEdgePort - 1 << std::endl;
+	}
+
 	JuntosAdapter adapter{};
 	std::vector<Edge> alive_edges{};
+	uint16_t m_NextEdgePort = 4001;
 };
 
 } // namespace orla
