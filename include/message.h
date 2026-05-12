@@ -7,7 +7,8 @@ enum class MessageType : uint8_t { Invalid = 0,
 								   ClientConnectReqPong,
 								   ClientAssigned,
 								   Data,
-								   Heartbeat};
+								   Heartbeat,
+								   HeartbeatAck};
 
 #pragma pack(push, 1)
 struct MessageHeader {
