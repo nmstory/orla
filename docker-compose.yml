@@ -11,10 +11,12 @@ services:
       MAX_LATENCY_MS: 100
       LOSS_RATE: 0.1
       REORDER_PROB: 0.05
+      PROMETHEUS_PORT: 9100
     networks:
       - orla_net
     expose:
       - "4000/udp"
+      - "9100/tcp"
     ports:
       - "4000:4000/udp"
 
@@ -28,10 +30,12 @@ services:
       LOSS_RATE: 0.1
       REORDER_PROB: 0.05
       CONTROLLER_ADDR: controller
+      PROMETHEUS_PORT: 9101
     networks:
       - orla_net
     expose:
       - "4001/udp"
+      - "9101/tcp"
 
   edge2:
     image: orla:latest
@@ -43,10 +47,12 @@ services:
       LOSS_RATE: 0.1
       REORDER_PROB: 0.05
       CONTROLLER_ADDR: controller
+      PROMETHEUS_PORT: 9102
     networks:
       - orla_net
     expose:
       - "4002/udp"
+      - "9102/tcp"
 
   client:
     image: orla:latest
@@ -62,6 +68,29 @@ services:
       - orla_net
     expose:
       - "4003/udp"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - orla_net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - orla_net
+    depends_on:
+      - prometheus
 
 networks:
   orla_net:
