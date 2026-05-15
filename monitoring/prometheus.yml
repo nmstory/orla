@@ -8,3 +8,9 @@ scrape_configs:
           - "controller:9100"
           - "edge1:9101"
           - "edge2:9102"
+          
+  - job_name: "node"
+    static_configs:
+      - targets:
+          - "node_exporter:9100"
+
