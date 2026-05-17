@@ -113,9 +113,9 @@ private:
 	JuntosAdapter m_Adapter;
 	std::vector<Peer> m_Clients;
 
-	prometheus::Counter*   m_TasksCompleted = nullptr;
-	prometheus::Histogram* m_TaskDuration   = nullptr;
-	prometheus::Gauge*     m_ActiveClients  = nullptr;
+	prometheus::Counter* m_TasksCompleted = nullptr;
+	prometheus::Histogram* m_TaskDuration = nullptr;
+	prometheus::Gauge* m_ActiveClients = nullptr;
 };
 
 } // namespace orla
