@@ -4,6 +4,9 @@
 #include <iostream>
 #include <message.h>
 #include <network_adapter.h>
+#include <prometheus/counter.h>
+#include <prometheus/gauge.h>
+#include <prometheus/histogram.h>
 #include <thread>
 #include <vector>
 
@@ -11,7 +14,24 @@ namespace orla {
 
 class EdgeNode : public NodeInterface {
 public:
-	explicit EdgeNode(prometheus::Registry& registry) : NodeInterface(registry) {}
+	explicit EdgeNode(prometheus::Registry& registry) : NodeInterface(registry) {
+		m_TasksCompleted = &prometheus::BuildCounter()
+			.Name("tasks_completed_total")
+			.Help("Tasks completed by this edge node")
+			.Register(m_Registry).Add({});
+
+		m_TaskDuration = &prometheus::BuildHistogram()
+			.Name("task_duration_seconds")
+			.Help("Task processing duration in seconds")
+			.Register(m_Registry).Add({}, prometheus::Histogram::BucketBoundaries{
+				0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0
+			});
+
+		m_ActiveClients = &prometheus::BuildGauge()
+			.Name("active_clients")
+			.Help("Number of clients currently assigned to this edge")
+			.Register(m_Registry).Add({});
+	}
 
 	void run() override {
 		uint16_t port = 4001;
@@ -36,6 +56,7 @@ public:
 			}
 			else if (msg.type() == MessageType::ClientAssigned) {
 				m_Clients.push_back(m_Adapter.setupPeer(ip, port));
+				m_ActiveClients->Set(m_Clients.size());
 			}
 			else if (msg.type() == MessageType::ClientWorkRequest) {
 				Peer client = m_Adapter.setupPeer(ip, port);
@@ -66,7 +87,9 @@ private:
 		std::cout << "[Edge] Processing task_id=" << req.task_id
 				  << " duration_ms=" << req.duration_ms << std::endl;
 
-		std::thread([this, req, client]() {
+		auto start = std::chrono::steady_clock::now();
+		
+		std::thread([this, req, client, start]() {
 			std::this_thread::sleep_for(std::chrono::milliseconds(req.duration_ms));
 
 			WorkResult result{req.task_id};
@@ -79,11 +102,20 @@ private:
 				.build();
 			m_Adapter.enqueue(ack, client);
 			std::cout << "[Edge] Completed task_id=" << req.task_id << std::endl;
+
+			double elapsed = std::chrono::duration<double>(
+			std::chrono::steady_clock::now() - start).count();
+			m_TaskDuration->Observe(elapsed);
+			m_TasksCompleted->Increment();
 		}).detach();
 	}
 
 	JuntosAdapter m_Adapter;
 	std::vector<Peer> m_Clients;
+
+	prometheus::Counter*   m_TasksCompleted = nullptr;
+	prometheus::Histogram* m_TaskDuration   = nullptr;
+	prometheus::Gauge*     m_ActiveClients  = nullptr;
 };
 
 } // namespace orla
