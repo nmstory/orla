@@ -34,6 +34,8 @@ public:
 	}
 
 	void run() override {
+		m_Adapter.initMetrics(m_Registry);
+
 		uint16_t port = 4001;
 		if (char *e = std::getenv("PORT")) port = std::atoi(e);
 		m_Adapter.start("0.0.0.0", port);

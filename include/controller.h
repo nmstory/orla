@@ -51,6 +51,8 @@ class Controller : public NodeInterface {
 	}
 
 	void run() override {
+		m_Adapter.initMetrics(m_Registry);
+
 		m_Adapter.on_receive([this](const Message &msg, const std::string &ip, uint16_t port) {
 			if (msg.type() == MessageType::Heartbeat) {
 				auto it = getEdge(ip, port);

@@ -14,6 +14,8 @@ public:
 	explicit Client(prometheus::Registry& registry) : NodeInterface(registry) {}
 
 	void run() override {
+		m_Adapter.initMetrics(m_Registry);
+
 		uint16_t port = 4002; // init to default
 		if (char *e = std::getenv("PORT")) port = std::atoi(e);
 		m_Adapter.start("0.0.0.0", port);
