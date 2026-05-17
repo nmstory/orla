@@ -11,6 +11,8 @@ namespace orla {
 
 class EdgeNode : public NodeInterface {
 public:
+	explicit EdgeNode(prometheus::Registry& registry) : NodeInterface(registry) {}
+
 	void run() override {
 		uint16_t port = 4001;
 		if (char *e = std::getenv("PORT")) port = std::atoi(e);

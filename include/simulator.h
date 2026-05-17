@@ -24,11 +24,11 @@ class Simulator {
 		std::unique_ptr<NodeInterface> node;
 
 		if (role == "controller") {
-			this->node = std::make_unique<Controller>();
+			this->node = std::make_unique<Controller>(m_Metrics->registry());
 		} else if (role == "edge") {
-			this->node = std::make_unique<EdgeNode>();
+			this->node = std::make_unique<EdgeNode>(m_Metrics->registry());
 		} else if (role == "client") {
-			this->node = std::make_unique<Client>();
+			this->node = std::make_unique<Client>(m_Metrics->registry());
 		} else {
 			std::cerr << "Unknown ROLE: " << role << std::endl;
 			return 1;

@@ -32,6 +32,8 @@ struct Edge {
 
 class Controller : public NodeInterface {
   public:
+	explicit Controller(prometheus::Registry& registry) : NodeInterface(registry) {}
+
 	void run() override {
 		m_Adapter.on_receive([this](const Message &msg, const std::string &ip, uint16_t port) {
 			if (msg.type() == MessageType::Heartbeat) {

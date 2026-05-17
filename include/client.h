@@ -11,6 +11,8 @@ namespace orla {
 
 class Client : public NodeInterface {
 public:
+	explicit Client(prometheus::Registry& registry) : NodeInterface(registry) {}
+
 	void run() override {
 		uint16_t port = 4002; // init to default
 		if (char *e = std::getenv("PORT")) port = std::atoi(e);
