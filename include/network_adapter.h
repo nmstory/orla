@@ -103,17 +103,17 @@ class JuntosAdapter : public INetworkAdapter {
 
 	void initMetrics(prometheus::Registry& registry) {
 		m_TotalBytesSent = &prometheus::BuildCounter()
-			.Name("total_bytes_sent")
+			.Name("bytes_sent_total")
 			.Help("Total bytes sent")
 			.Register(registry).Add({});
 
 		m_TotalBytesReceived = &prometheus::BuildCounter()
-			.Name("total_bytes_received")
+			.Name("bytes_received_total")
 			.Help("Total bytes received")
 			.Register(registry).Add({});
 
 		m_PacketsDropped = &prometheus::BuildCounter()
-			.Name("total_bytes_dropped")
+			.Name("bytes_dropped_total")
 			.Help("Total packets dropped due to simulated loss")
 			.Register(registry).Add({});
 	}
