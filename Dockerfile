@@ -34,8 +34,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY --from=builder /app/build/orla /usr/local/bin/orla
 
-# Expose UDP ports
+# Expose UDP ports for simulation traffic and TCP for Prometheus scraping
 EXPOSE 4000-4100/udp
+EXPOSE 9100-9102/tcp
 
 ENV ROLE=edge \
     PORT=4001 \

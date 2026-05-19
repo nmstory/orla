@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <functional>
 #include <mutex>
+#include <prometheus/counter.h>
+#include <prometheus/registry.h>
 #include <queue>
 #include <random>
 #include <span>
@@ -41,7 +43,8 @@ class JuntosAdapter : public INetworkAdapter {
 		std::vector<uint8_t> raw(buf.begin(), buf.end());
 
 		if (m_Dist01(m_Rng) < config::LOSS_RATE) {
-			return; // packet dropped
+			if (m_PacketsDropped) m_PacketsDropped->Increment();
+			return;
 		}
 
 		// add random latency
@@ -84,6 +87,7 @@ class JuntosAdapter : public INetworkAdapter {
 						inet_ntop(AF_INET, &(sender.sin_addr), ip, INET_ADDRSTRLEN);
 						uint16_t sender_port = ntohs(sender.sin_port);
 						m_RecvCallback(msg, std::string(ip), sender_port);
+						if (m_TotalBytesReceived) m_TotalBytesReceived->Increment(data.size());
 					} catch (const std::exception &e){
 						std::cerr << "Deserialise failed: " << e.what() << std::endl;
 					}
@@ -95,6 +99,23 @@ class JuntosAdapter : public INetworkAdapter {
 
 		// sender worker
 		m_Worker = std::thread([this] { this->workerLoop(); });
+	}
+
+	void initMetrics(prometheus::Registry& registry) {
+		m_TotalBytesSent = &prometheus::BuildCounter()
+			.Name("bytes_sent_total")
+			.Help("Total bytes sent")
+			.Register(registry).Add({});
+
+		m_TotalBytesReceived = &prometheus::BuildCounter()
+			.Name("bytes_received_total")
+			.Help("Total bytes received")
+			.Register(registry).Add({});
+
+		m_PacketsDropped = &prometheus::BuildCounter()
+			.Name("bytes_dropped_total")
+			.Help("Total packets dropped due to simulated loss")
+			.Register(registry).Add({});
 	}
 
 	Peer setupPeer(const std::string &peer_addr, uint16_t port) {
@@ -124,7 +145,7 @@ class JuntosAdapter : public INetworkAdapter {
 		std::chrono::steady_clock::time_point when;
 		sockaddr_in addr;
 		std::vector<uint8_t> buf;
-		bool operator>(Pending const &o) const { return when > o.when; } // for priority_queue
+		bool operator>(Pending const &o) const { return when > o.when; }
 	};
 
 	std::priority_queue<Pending, std::vector<Pending>, std::greater<Pending>> m_Pending;
@@ -132,6 +153,10 @@ class JuntosAdapter : public INetworkAdapter {
 	std::condition_variable m_Cv;
 	std::thread m_Worker;
 	bool m_Stopped;
+
+	prometheus::Counter* m_TotalBytesSent = nullptr;
+	prometheus::Counter* m_TotalBytesReceived = nullptr;
+	prometheus::Counter* m_PacketsDropped = nullptr;
 
 	void workerLoop() {
 		std::unique_lock<std::mutex> lk(m_Mutex);
@@ -159,8 +184,7 @@ class JuntosAdapter : public INetworkAdapter {
 							<< dest_ip << ":" << ntohs(send_pkt.addr.sin_port)
 							<< " on sock " << sock << std::endl;
 					sendData<int>(sock, send_pkt.addr, payload, payload.size());
-
-					sendData<int>(sock, send_pkt.addr, payload, payload.size());
+					if (m_TotalBytesSent) m_TotalBytesSent->Increment(send_pkt.buf.size());
 				}
 				lk.lock();
 			}

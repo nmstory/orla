@@ -8,6 +8,8 @@
 #include <message.h>
 #include <network_adapter.h>
 #include <optional>
+#include <prometheus/counter.h>
+#include <prometheus/gauge.h>
 #include <thread>
 #include <vector>
 
@@ -32,13 +34,31 @@ struct Edge {
 
 class Controller : public NodeInterface {
   public:
+	explicit Controller(prometheus::Registry& registry) : NodeInterface(registry) {
+		m_ActiveEdges = &prometheus::BuildGauge()
+			.Name("active_edges")
+			.Help("The number of edges currently active within this session")
+			.Register(m_Registry).Add({});
+		
+		auto& scaleFamily = prometheus::BuildCounter()
+			.Name("scaling_events_total")
+			.Help("Autoscaling events")
+			.Register(m_Registry);
+
+		m_ScaleUp   = &scaleFamily.Add({{"direction", "up"}});
+		m_ScaleDown = &scaleFamily.Add({{"direction", "down"}});
+	}
+
 	void run() override {
+		m_Adapter.initMetrics(m_Registry);
+
 		m_Adapter.on_receive([this](const Message &msg, const std::string &ip, uint16_t port) {
 			if (msg.type() == MessageType::Heartbeat) {
 				auto it = getEdge(ip, port);
 				if (it == m_AliveEdges.end())
 					m_AliveEdges.push_back(m_Adapter.setupPeer(ip, port));
 				removeDeadEdges();
+				m_ActiveEdges->Set(m_AliveEdges.size());
 			} else if (msg.type() == MessageType::HeartbeatAck) {
 				auto it = getEdge(ip, port);
 				if (it != m_AliveEdges.end()) {
@@ -110,6 +130,8 @@ class Controller : public NodeInterface {
 						  "-e ROLE=edge -e PORT=" + std::to_string(m_NextEdgePort++) + " orla:latest";
 		std::system(cmd.c_str());
 		std::cout << "[Controller] Spawned new edge on port " << m_NextEdgePort - 1 << std::endl;
+		m_ActiveEdges->Set(m_AliveEdges.size());
+		m_ScaleUp->Increment();
 	}
 
 	void killEdge(std::vector<Edge>::iterator it) {
@@ -118,6 +140,8 @@ class Controller : public NodeInterface {
 		std::system(cmd.c_str());
 		std::cout << "[Controller] Killed edge on port " << port << std::endl;
 		m_AliveEdges.erase(it);
+		m_ActiveEdges->Set(m_AliveEdges.size());
+		m_ScaleDown->Increment();
 	}
 
 	void checkScaleDown() {
@@ -135,6 +159,10 @@ class Controller : public NodeInterface {
 	JuntosAdapter m_Adapter{};
 	std::vector<Edge> m_AliveEdges{};
 	uint16_t m_NextEdgePort = 4001;
-};
 
+	prometheus::Gauge* m_ActiveEdges = nullptr;
+	prometheus::Counter* m_ScaleUp = nullptr;
+	prometheus::Counter* m_ScaleDown = nullptr;
+
+};
 } // namespace orla
