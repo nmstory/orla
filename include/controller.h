@@ -43,7 +43,6 @@ class Controller : public NodeInterface {
 		auto& scaleFamily = prometheus::BuildCounter()
 			.Name("scaling_events_total")
 			.Help("Autoscaling events")
-			.Labels({{"direction", ""}})
 			.Register(m_Registry);
 
 		m_ScaleUp   = &scaleFamily.Add({{"direction", "up"}});

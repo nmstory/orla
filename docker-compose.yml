@@ -80,11 +80,11 @@ services:
       - orla_net
 
   grafana:
-    image: grafana/grafana:10.4.3
+    image: grafana/grafana:11.6.0
     container_name: grafana
     volumes:
+      - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     ports:
       - "3000:3000"
     networks:
@@ -108,3 +108,6 @@ services:
 networks:
   orla_net:
     driver: bridge
+
+volumes:
+  grafana_data:
