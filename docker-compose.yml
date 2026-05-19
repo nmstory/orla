@@ -70,7 +70,7 @@ services:
       - "4003/udp"
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.53.0
     container_name: prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -80,7 +80,7 @@ services:
       - orla_net
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.3
     container_name: grafana
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
@@ -93,7 +93,7 @@ services:
       - prometheus
 
   node_exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.8.1
     container_name: node_exporter
     volumes:
       - /proc:/host/proc:ro
