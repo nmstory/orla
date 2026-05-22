@@ -1,5 +1,5 @@
 # Orla
-A C++ distributed network simulator - modelling edge servers over unreliable networks using (Juntos)[https://github.com/nmstory/juntos], my in-house networking library.
+A C++ distributed network simulator - modelling edge servers over unreliable networks using [Juntos](https://github.com/nmstory/juntos), my in-house networking library.
 
 ## Getting Started
 
