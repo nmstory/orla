@@ -127,7 +127,9 @@ class Controller : public NodeInterface {
 
 	void spawnEdge() {
 		std::string cmd = "docker run -d --network orla_orla_net "
-						  "-e ROLE=edge -e PORT=" + std::to_string(m_NextEdgePort++) + " orla:latest";
+						  "--label orla.role=edge "
+						  "-e ROLE=edge -e PORT=" + std::to_string(m_NextEdgePort++) +
+						  " -e PROMETHEUS_PORT=9101 orla:latest";
 		std::system(cmd.c_str());
 		std::cout << "[Controller] Spawned new edge on port " << m_NextEdgePort - 1 << std::endl;
 		m_ActiveEdges->Set(m_AliveEdges.size());
