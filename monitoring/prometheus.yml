@@ -6,11 +6,23 @@ scrape_configs:
     static_configs:
       - targets:
           - "controller:9100"
-          - "edge1:9101"
-          - "edge2:9102"
-          
+
+  - job_name: "orla_edges"
+    docker_sd_configs:
+      - host: "tcp://dockerproxy:2375"
+        filters:
+          - name: label
+            values: ["orla.role=edge"]
+    relabel_configs:
+      - source_labels: [__meta_docker_network_ip]
+        target_label: __address__
+        replacement: '$1:9101'
+      - source_labels: [__meta_docker_container_name]
+        target_label: instance
+        regex: '/(.*)'
+        replacement: '$1'
+
   - job_name: "node"
     static_configs:
       - targets:
           - "node_exporter:9100"
-

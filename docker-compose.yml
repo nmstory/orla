@@ -12,6 +12,8 @@ services:
       LOSS_RATE: 0.1
       REORDER_PROB: 0.05
       PROMETHEUS_PORT: 9100
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - orla_net
     expose:
@@ -20,9 +22,8 @@ services:
     ports:
       - "4000:4000/udp"
 
-  edge1:
+  edge:
     image: orla:latest
-    container_name: edge1
     environment:
       ROLE: edge
       PORT: 4001
@@ -31,28 +32,13 @@ services:
       REORDER_PROB: 0.05
       CONTROLLER_ADDR: controller
       PROMETHEUS_PORT: 9101
+    labels:
+      orla.role: edge
     networks:
       - orla_net
     expose:
       - "4001/udp"
       - "9101/tcp"
-
-  edge2:
-    image: orla:latest
-    container_name: edge2
-    environment:
-      ROLE: edge
-      PORT: 4002
-      MAX_LATENCY_MS: 100
-      LOSS_RATE: 0.1
-      REORDER_PROB: 0.05
-      CONTROLLER_ADDR: controller
-      PROMETHEUS_PORT: 9102
-    networks:
-      - orla_net
-    expose:
-      - "4002/udp"
-      - "9102/tcp"
 
   client:
     image: orla:latest
@@ -69,6 +55,16 @@ services:
     expose:
       - "4003/udp"
 
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: dockerproxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+    networks:
+      - orla_net
+
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
@@ -78,6 +74,8 @@ services:
       - "9090:9090"
     networks:
       - orla_net
+    depends_on:
+      - dockerproxy
 
   grafana:
     image: grafana/grafana:11.6.0
