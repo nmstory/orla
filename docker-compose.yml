@@ -42,7 +42,6 @@ services:
 
   client:
     image: orla:latest
-    container_name: client
     environment:
       ROLE: client
       PORT: 4003
