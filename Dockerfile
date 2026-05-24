@@ -21,7 +21,10 @@ RUN if [ -d .git ]; then \
 RUN cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 RUN cmake --build build -j$(nproc)
 
-# Stage 2: Runtime Image
+# Stage 2: Docker CLI binary
+FROM docker:27-cli AS docker-cli
+
+# Stage 3: Runtime Image
 FROM ubuntu:24.04 AS runtime
 
 RUN apt-get update && apt-get install -y \
@@ -33,6 +36,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY --from=builder /app/build/orla /usr/local/bin/orla
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 # Expose UDP ports for simulation traffic and TCP for Prometheus scraping
 EXPOSE 4000-4100/udp
