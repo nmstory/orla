@@ -55,8 +55,14 @@ class Controller : public NodeInterface {
 		m_Adapter.on_receive([this](const Message &msg, const std::string &ip, uint16_t port) {
 			if (msg.type() == MessageType::Heartbeat) {
 				auto it = getEdge(ip, port);
-				if (it == m_AliveEdges.end())
+				if (it == m_AliveEdges.end()) {
 					m_AliveEdges.push_back(m_Adapter.setupPeer(ip, port));
+					it = m_AliveEdges.end() - 1;
+					std::cout << "[Controller] Edge registered: " << ip << ":" << port << std::endl;
+					// Immediately probe the new edge so its score is set before any client connects
+					it->m_LastPingSentAt = std::chrono::system_clock::now();
+					m_Adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), it->m_Peer);
+				}
 				removeDeadEdges();
 				m_ActiveEdges->Set(m_AliveEdges.size());
 			} else if (msg.type() == MessageType::HeartbeatAck) {
@@ -70,8 +76,9 @@ class Controller : public NodeInterface {
 				}
 			} else if (msg.type() == MessageType::ClientConnectReqPing) {
 				auto it = getBestEdge();
-				if (it != m_AliveEdges.end() && it->m_Score >= config::SCALE_UP_THRESHOLD)
+				if (it != m_AliveEdges.end() && it->m_Score >= config::SCALE_UP_THRESHOLD) {
 					spawnEdge();
+				}
 				if (it != m_AliveEdges.end()) {
 					char ip_buf[INET_ADDRSTRLEN];
 					inet_ntop(AF_INET, &it->m_Peer.sendAddr.sin_addr, ip_buf, INET_ADDRSTRLEN);
@@ -126,12 +133,18 @@ class Controller : public NodeInterface {
 	}
 
 	void spawnEdge() {
+		uint16_t port = m_NextEdgePort++;
+		std::string name = "edge-" + std::to_string(port - 4000);
 		std::string cmd = "docker run -d --network orla_orla_net "
+						  "--name " + name + " "
 						  "--label orla.role=edge "
-						  "-e ROLE=edge -e PORT=" + std::to_string(m_NextEdgePort++) +
+						  "-e ROLE=edge -e PORT=" + std::to_string(port) +
 						  " -e PROMETHEUS_PORT=9101 orla:latest";
-		std::system(cmd.c_str());
-		std::cout << "[Controller] Spawned new edge on port " << m_NextEdgePort - 1 << std::endl;
+		std::cout << "[Controller] Spawning edge on port " << port << "..." << std::endl;
+		std::thread([cmd, port]() {
+			if (std::system(cmd.c_str()) != 0)
+				std::cerr << "[Controller] Failed to spawn edge on port " << port << std::endl;
+		}).detach();
 		m_ActiveEdges->Set(m_AliveEdges.size());
 		m_ScaleUp->Increment();
 	}
