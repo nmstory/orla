@@ -4,6 +4,13 @@ project(Orla LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(ORLA_TSAN "Build with ThreadSanitizer" OFF)
+if(ORLA_TSAN)
+    message(STATUS "ThreadSanitizer enabled")
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g -O1)
+    add_link_options(-fsanitize=thread)
+endif()
+
 find_package(ZLIB REQUIRED)
 
 add_subdirectory(external)

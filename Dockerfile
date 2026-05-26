@@ -17,8 +17,10 @@ RUN if [ -d .git ]; then \
     echo "no .git in build context; assuming submodules are already present"; \
     fi
 
+ARG ORLA_TSAN=OFF
+
 # TODO: remove debugging tools in production image
-RUN cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+RUN cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DORLA_TSAN=${ORLA_TSAN}
 RUN cmake --build build -j$(nproc)
 
 # Stage 2: Docker CLI binary
@@ -29,6 +31,7 @@ FROM ubuntu:24.04 AS runtime
 
 RUN apt-get update && apt-get install -y \
     libpthread-stubs0-dev \
+    libtsan2 \
     # TODO: remove debugging tools in production image
     gdb \
     strace \

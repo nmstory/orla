@@ -2,7 +2,10 @@ version: "3.9"
 
 services:
   controller:
-    build: .
+    build:
+      context: .
+      args:
+        ORLA_TSAN: ${ORLA_TSAN:-OFF}
     image: orla:latest
     container_name: controller
     environment:
@@ -12,6 +15,7 @@ services:
       LOSS_RATE: 0.1
       REORDER_PROB: 0.05
       PROMETHEUS_PORT: 9100
+      TSAN_OPTIONS: "halt_on_error=0 second_deadlock_stack=1 history_size=7"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
