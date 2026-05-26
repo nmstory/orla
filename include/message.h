@@ -34,48 +34,15 @@ struct MessageHeader {
 
 class Message {
   public:
-	Message(MessageType t, std::string payload, uint32_t seq = 0)
-		: m_Header{seq, static_cast<uint32_t>(payload.size()), 0, t},
-		  m_Payload(std::move(payload)) {
-		m_Header.checksum =
-			crc32(0, reinterpret_cast<const Bytef *>(m_Payload.data()),
-				  m_Payload.size());
-	}
+	Message(MessageType t, std::string payload, uint32_t seq = 0);
 
 	MessageType type() const noexcept { return m_Header.type; }
 	uint32_t sequence() const noexcept { return m_Header.sequence; }
 	const std::string &payload() const noexcept { return m_Payload; }
 
-	std::vector<uint8_t> serialize() const {
-		std::vector<uint8_t> buf(sizeof(m_Header) + m_Payload.size());
-		std::memcpy(buf.data(), &m_Header, sizeof(m_Header));
-		std::memcpy(buf.data() + sizeof(m_Header), m_Payload.data(),
-					m_Payload.size());
-		return buf;
-	}
+	std::vector<uint8_t> serialize() const;
 
-	static Message deserialize(const uint8_t *data, size_t len) {
-		if (len < sizeof(MessageHeader)) {
-			throw std::runtime_error("Too short");
-		}
-		MessageHeader hdr;
-		std::memcpy(&hdr, data, sizeof(MessageHeader));
-		std::string payload;
-		if (hdr.payload_size > 0) {
-			if (len < sizeof(MessageHeader) + hdr.payload_size) {
-				throw std::runtime_error("Payload size mismatch");
-			}
-			payload.assign(
-				reinterpret_cast<const char *>(data + sizeof(MessageHeader)),
-				hdr.payload_size);
-			uint32_t crc =
-				crc32(0, reinterpret_cast<const Bytef *>(payload.data()),
-					  payload.size());
-			if (crc != hdr.checksum)
-				throw std::runtime_error("CRC mismatch");
-		}
-		return Message(hdr.type, payload, hdr.sequence);
-	}
+	static Message deserialize(const uint8_t *data, size_t len);
 
 	// Using builder pattern for easier construction
 	class Builder {
@@ -96,9 +63,7 @@ class Message {
 			m_Sequence = s;
 			return *this;
 		}
-		Message build() {
-			return Message(m_Type, std::move(m_Payload), m_Sequence);
-		}
+		Message build();
 	};
 
   private:
