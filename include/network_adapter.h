@@ -50,9 +50,6 @@ class JuntosAdapter : public INetworkAdapter {
 	std::function<void(const Message &, const std::string &, uint16_t)> m_RecvCallback;
 	LinuxSession *m_Session;
 
-	std::mt19937 m_Rng;
-	std::uniform_real_distribution<double> m_Dist01;
-
 	struct Pending {
 		std::chrono::steady_clock::time_point when;
 		sockaddr_in addr;

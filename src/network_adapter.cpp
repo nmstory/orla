@@ -9,8 +9,6 @@ namespace orla {
 
 JuntosAdapter::JuntosAdapter()
 	: m_Session(nullptr),
-	  m_Rng(std::random_device{}()),
-	  m_Dist01(0.0, 1.0),
 	  m_Stopped(false) {}
 
 JuntosAdapter::~JuntosAdapter() {
@@ -26,21 +24,23 @@ JuntosAdapter::~JuntosAdapter() {
 }
 
 void JuntosAdapter::enqueue(const Message &msg, const Peer &peer) {
-	auto buf = msg.serialize();
-	std::vector<uint8_t> raw(buf.begin(), buf.end());
+	thread_local std::mt19937 rng{std::random_device{}()};
+	thread_local std::uniform_real_distribution<double> dist01(0.0, 1.0);
 
-	if (m_Dist01(m_Rng) < config::LOSS_RATE) {
+	if (dist01(rng) < config::LOSS_RATE) {
 		if (m_PacketsDropped) m_PacketsDropped->Increment();
 		return;
 	}
 
-	// add random latency
-	int ms = config::MAX_LATENCY_MS > 0 ? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(m_Rng) : 0;
+	int ms = config::MAX_LATENCY_MS > 0
+		? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(rng)
+		: 0;
 	auto deliver_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
 
-	{ // push to pending queue
+	auto buf = msg.serialize();
+	{
 		std::lock_guard<std::mutex> lk(m_Mutex);
-		m_Pending.push(Pending{deliver_at, peer.sendAddr, std::move(raw)});
+		m_Pending.push(Pending{deliver_at, peer.sendAddr, std::move(buf)});
 		m_Cv.notify_one();
 	}
 }
