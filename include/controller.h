@@ -2,6 +2,7 @@
 #include "node_interface.h"
 #include <chrono>
 #include <message.h>
+#include <mutex>
 #include <network_adapter.h>
 #include <prometheus/counter.h>
 #include <prometheus/gauge.h>
@@ -48,5 +49,6 @@ class Controller : public NodeInterface {
 	prometheus::Counter* m_ScaleUp = nullptr;
 	prometheus::Counter* m_ScaleDown = nullptr;
 
+	mutable std::mutex m_EdgesMutex;
 };
 } // namespace orla

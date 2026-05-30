@@ -4,7 +4,9 @@
 #include <config.h>
 #include <cstdlib>
 #include <iostream>
+#include <optional>
 #include <thread>
+#include <vector>
 
 namespace orla {
 
@@ -28,18 +30,25 @@ void Controller::run() {
 
 	m_Adapter.on_receive([this](const Message &msg, const std::string &ip, uint16_t port) {
 		if (msg.type() == MessageType::Heartbeat) {
-			auto it = getEdge(ip, port);
-			if (it == m_AliveEdges.end()) {
-				m_AliveEdges.push_back(m_Adapter.setupPeer(ip, port));
-				it = m_AliveEdges.end() - 1;
-				std::cout << "[Controller] Edge registered: " << ip << ":" << port << std::endl;
-				// Immediately probe the new edge so its score is set before any client connects
-				it->m_LastPingSentAt = std::chrono::system_clock::now();
-				m_Adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), it->m_Peer);
+			std::optional<Peer> probe_peer;
+			{
+				std::lock_guard<std::mutex> lk(m_EdgesMutex);
+				auto it = getEdge(ip, port);
+				if (it == m_AliveEdges.end()) {
+					m_AliveEdges.push_back(m_Adapter.setupPeer(ip, port));
+					it = m_AliveEdges.end() - 1;
+					std::cout << "[Controller] Edge registered: " << ip << ":" << port << std::endl;
+					it->m_LastPingSentAt = std::chrono::system_clock::now();
+					probe_peer.emplace(it->m_Peer);
+				}
+				removeDeadEdges();
+				m_ActiveEdges->Set(m_AliveEdges.size());
 			}
-			removeDeadEdges();
-			m_ActiveEdges->Set(m_AliveEdges.size());
+			if (probe_peer) {
+				m_Adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), *probe_peer);
+			}
 		} else if (msg.type() == MessageType::HeartbeatAck) {
+			std::lock_guard<std::mutex> lk(m_EdgesMutex);
 			auto it = getEdge(ip, port);
 			if (it != m_AliveEdges.end()) {
 				int64_t latencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -49,14 +58,21 @@ void Controller::run() {
 				it->m_LastAckAt = std::chrono::system_clock::now();
 			}
 		} else if (msg.type() == MessageType::ClientConnectReqPing) {
-			auto it = getBestEdge();
-			if (it != m_AliveEdges.end() && it->m_Score >= config::SCALE_UP_THRESHOLD) {
-				spawnEdge();
+			std::optional<Peer> best_peer;
+			{
+				std::lock_guard<std::mutex> lk(m_EdgesMutex);
+				auto it = getBestEdge();
+				if (it != m_AliveEdges.end()) {
+					best_peer.emplace(it->m_Peer);
+					if (it->m_Score >= config::SCALE_UP_THRESHOLD) {
+						spawnEdge();
+					}
+				}
 			}
-			if (it != m_AliveEdges.end()) {
+			if (best_peer) {
 				char ip_buf[INET_ADDRSTRLEN];
-				inet_ntop(AF_INET, &it->m_Peer.sendAddr.sin_addr, ip_buf, INET_ADDRSTRLEN);
-				uint16_t edge_port = ntohs(it->m_Peer.sendAddr.sin_port);
+				inet_ntop(AF_INET, &best_peer->sendAddr.sin_addr, ip_buf, INET_ADDRSTRLEN);
+				uint16_t edge_port = ntohs(best_peer->sendAddr.sin_port);
 
 				Message response = Message::Builder()
 					.type(MessageType::ClientConnectReqPong)
@@ -77,13 +93,25 @@ void Controller::run() {
 
 	while (true) {
 		std::this_thread::sleep_for(std::chrono::seconds(2));
-		for (auto &edge : m_AliveEdges) {
-			edge.m_LastPingSentAt = std::chrono::system_clock::now();
-			m_Adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), edge.m_Peer);
+
+		std::vector<Peer> targets;
+		{
+			std::lock_guard<std::mutex> lk(m_EdgesMutex);
+			targets.reserve(m_AliveEdges.size());
+			for (auto &edge : m_AliveEdges) {
+				edge.m_LastPingSentAt = std::chrono::system_clock::now();
+				targets.push_back(edge.m_Peer);
+			}
+			checkScaleDown();
 		}
-		checkScaleDown();
+
+		for (auto &peer : targets) {
+			m_Adapter.enqueue(Message::Builder().type(MessageType::Heartbeat).build(), peer);
+		}
 	}
 }
+
+// Helpers below assume m_EdgesMutex is held by the caller.
 
 std::vector<Edge>::iterator Controller::getEdge(const std::string &ip, uint16_t port) {
 	return std::find_if(m_AliveEdges.begin(), m_AliveEdges.end(), [&](const Edge &p) {
@@ -118,18 +146,22 @@ void Controller::spawnEdge() {
 		if (std::system(cmd.c_str()) != 0)
 			std::cerr << "[Controller] Failed to spawn edge on port " << port << std::endl;
 	}).detach();
-	m_ActiveEdges->Set(m_AliveEdges.size());
 	m_ScaleUp->Increment();
 }
 
 void Controller::killEdge(std::vector<Edge>::iterator it) {
-	uint16_t port    = ntohs(it->m_Peer.sendAddr.sin_port);
-	std::string cmd  = "docker stop $(docker ps -q --filter publish=" + std::to_string(port) + ") 2>/dev/null";
-	std::system(cmd.c_str());
-	std::cout << "[Controller] Killed edge on port " << port << std::endl;
+	uint16_t port = ntohs(it->m_Peer.sendAddr.sin_port);
 	m_AliveEdges.erase(it);
 	m_ActiveEdges->Set(m_AliveEdges.size());
 	m_ScaleDown->Increment();
+
+	// docker stop blocks for seconds so not running it under the lock
+	std::thread([port]() {
+		std::string cmd = "docker stop $(docker ps -q --filter publish=" + std::to_string(port) + ") 2>/dev/null";
+		if (std::system(cmd.c_str()) != 0)
+			std::cerr << "[Controller] docker stop failed on port " << port << std::endl;
+		std::cout << "[Controller] Killed edge on port " << port << std::endl;
+	}).detach();
 }
 
 void Controller::checkScaleDown() {

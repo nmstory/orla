@@ -17,7 +17,7 @@ RUN if [ -d .git ]; then \
     echo "no .git in build context; assuming submodules are already present"; \
     fi
 
-ARG ORLA_TSAN=OFF
+ARG ORLA_TSAN=ON
 
 # TODO: remove debugging tools in production image
 RUN cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DORLA_TSAN=${ORLA_TSAN}
