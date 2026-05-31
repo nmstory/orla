@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <functional>
 #include <mutex>
+#include <atomic>
 #include <prometheus/counter.h>
 #include <prometheus/registry.h>
 #include <queue>
@@ -61,7 +62,7 @@ class JuntosAdapter : public INetworkAdapter {
 	std::mutex m_Mutex;
 	std::condition_variable m_Cv;
 	std::thread m_Worker;
-	bool m_Stopped;
+	std::atomic<bool> m_Stopped;
 
 	prometheus::Counter* m_TotalBytesSent = nullptr;
 	prometheus::Counter* m_TotalBytesReceived = nullptr;
