@@ -46,11 +46,8 @@ void JuntosAdapter::start(std::string hostname, uint16_t port) {
 	if (!m_Session) {
 		m_Session = std::make_unique<LinuxSession>();
 	}
-	m_Session->initSessionSolo(hostname, port);
-
-	// Make recvfrom return every 200ms so the recv thread can poll its stop_token.
-	struct timeval tv{0, 200'000};
-	setsockopt(m_Session->getSocketFD(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+	// 200ms recv timeout so the recv thread can poll its stop_token.
+	m_Session->initSessionSolo(hostname, port, std::chrono::milliseconds(200));
 
 	m_RecvThread = std::jthread([this](std::stop_token st) {
 		while (!st.stop_requested()) {
