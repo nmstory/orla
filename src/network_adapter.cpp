@@ -4,43 +4,28 @@
 #include <cstdlib>
 #include <iostream>
 #include <span>
+#include <sys/time.h>
 
 namespace orla {
 
-JuntosAdapter::JuntosAdapter()
-	: m_Session(nullptr),
-	  m_Rng(std::random_device{}()),
-	  m_Dist01(0.0, 1.0),
-	  m_Stopped(false) {}
-
-JuntosAdapter::~JuntosAdapter() {
-	// stop worker
-	{
-		std::lock_guard<std::mutex> lk(m_Mutex);
-		m_Stopped = true;
-		m_Cv.notify_one();
-	}
-	if (m_Worker.joinable())
-		m_Worker.join();
-	delete m_Session;
-}
-
 void JuntosAdapter::enqueue(const Message &msg, const Peer &peer) {
-	auto buf = msg.serialize();
-	std::vector<uint8_t> raw(buf.begin(), buf.end());
+	thread_local std::mt19937 rng{std::random_device{}()};
+	thread_local std::uniform_real_distribution<double> dist01(0.0, 1.0);
 
-	if (m_Dist01(m_Rng) < config::LOSS_RATE) {
+	if (dist01(rng) < config::LOSS_RATE) {
 		if (m_PacketsDropped) m_PacketsDropped->Increment();
 		return;
 	}
 
-	// add random latency
-	int ms = config::MAX_LATENCY_MS > 0 ? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(m_Rng) : 0;
+	int ms = config::MAX_LATENCY_MS > 0
+		? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(rng)
+		: 0;
 	auto deliver_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
 
-	{ // push to pending queue
+	auto buf = msg.serialize();
+	{
 		std::lock_guard<std::mutex> lk(m_Mutex);
-		m_Pending.push(Pending{deliver_at, peer.sendAddr, std::move(raw)});
+		m_Pending.push(Pending{deliver_at, peer.sendAddr, std::move(buf)});
 		m_Cv.notify_one();
 	}
 }
@@ -59,33 +44,31 @@ void JuntosAdapter::start(std::string hostname, uint16_t port) {
 		config::REORDER_PROB = std::stod(e);
 
 	if (!m_Session) {
-		m_Session = new LinuxSession();
+		m_Session = std::make_unique<LinuxSession>();
 	}
-	m_Session->initSessionSolo(hostname, port);
+	// 200ms recv timeout so the recv thread can poll its stop_token.
+	m_Session->initSessionSolo(hostname, port, std::chrono::milliseconds(200));
 
-	auto receive_loop = [this]() {
-		while (!m_Stopped) {
+	m_RecvThread = std::jthread([this](std::stop_token st) {
+		while (!st.stop_requested()) {
 			auto [success, data, sender] = recvData(m_Session->getSocketFD());
-			if (success && m_RecvCallback) {
-				std::cout << "Received " << data.size() << std::endl;
-				try{
-					Message msg = Message::deserialize(reinterpret_cast<const uint8_t *>(data.data()), data.size());
-					char ip[INET_ADDRSTRLEN];
-					inet_ntop(AF_INET, &(sender.sin_addr), ip, INET_ADDRSTRLEN);
-					uint16_t sender_port = ntohs(sender.sin_port);
-					m_RecvCallback(msg, std::string(ip), sender_port);
-					if (m_TotalBytesReceived) m_TotalBytesReceived->Increment(data.size());
-				} catch (const std::exception &e){
-					std::cerr << "Deserialise failed: " << e.what() << std::endl;
-				}
-			}
-			std::this_thread::yield(); // TODO: cleanup blocking tech
-		}
-	};
-	std::thread(receive_loop).detach();
+			if (!success || !m_RecvCallback) continue;
 
-	// sender worker
-	m_Worker = std::thread([this] { this->workerLoop(); });
+			std::cout << "Received " << data.size() << std::endl;
+			try {
+				Message msg = Message::deserialize(reinterpret_cast<const uint8_t *>(data.data()), data.size());
+				char ip[INET_ADDRSTRLEN];
+				inet_ntop(AF_INET, &(sender.sin_addr), ip, INET_ADDRSTRLEN);
+				uint16_t sender_port = ntohs(sender.sin_port);
+				m_RecvCallback(msg, std::string(ip), sender_port);
+				if (m_TotalBytesReceived) m_TotalBytesReceived->Increment(data.size());
+			} catch (const std::exception &e) {
+				std::cerr << "Deserialise failed: " << e.what() << std::endl;
+			}
+		}
+	});
+
+	m_Worker = std::jthread([this](std::stop_token st) { this->workerLoop(st); });
 }
 
 void JuntosAdapter::initMetrics(prometheus::Registry& registry) {
@@ -109,20 +92,19 @@ Peer JuntosAdapter::setupPeer(const std::string &peer_addr, uint16_t port) {
 	return m_Session->setupPeer(peer_addr, port);
 }
 
-void JuntosAdapter::workerLoop() {
+void JuntosAdapter::workerLoop(std::stop_token st) {
 	std::unique_lock<std::mutex> lk(m_Mutex);
-	while (!m_Stopped) {
+	while (!st.stop_requested()) {
 		if (m_Pending.empty()) {
-			m_Cv.wait(lk, [this] { return m_Stopped || !m_Pending.empty(); });
-			if (m_Stopped)
-				break;
+			m_Cv.wait(lk, st, [this] { return !m_Pending.empty(); });
+			if (st.stop_requested()) break;
 		}
 
 		auto &pkt = m_Pending.top();
 		auto now = std::chrono::steady_clock::now();
-		if (pkt.when > now)
-			m_Cv.wait_until(lk, pkt.when);
-		else {
+		if (pkt.when > now) {
+			m_Cv.wait_until(lk, st, pkt.when, [] { return false; });
+		} else {
 			Pending send_pkt = std::move(const_cast<Pending &>(m_Pending.top()));
 			m_Pending.pop();
 			lk.unlock();
