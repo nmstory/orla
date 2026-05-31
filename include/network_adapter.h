@@ -6,12 +6,13 @@
 #include <condition_variable>
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <mutex>
-#include <atomic>
 #include <prometheus/counter.h>
 #include <prometheus/registry.h>
 #include <queue>
 #include <random>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
@@ -34,8 +35,8 @@ class INetworkAdapter {
 
 class JuntosAdapter : public INetworkAdapter {
   public:
-	JuntosAdapter();
-	~JuntosAdapter();
+	JuntosAdapter() = default;
+	~JuntosAdapter() = default;
 
 	void enqueue(const Message &msg, const Peer &peer) override;
 	void on_receive(
@@ -46,10 +47,10 @@ class JuntosAdapter : public INetworkAdapter {
 	Peer setupPeer(const std::string &peer_addr, uint16_t port);
 
   private:
-	void workerLoop();
+	void workerLoop(std::stop_token st);
 
 	std::function<void(const Message &, const std::string &, uint16_t)> m_RecvCallback;
-	LinuxSession *m_Session;
+	std::unique_ptr<LinuxSession> m_Session;
 
 	struct Pending {
 		std::chrono::steady_clock::time_point when;
@@ -60,13 +61,16 @@ class JuntosAdapter : public INetworkAdapter {
 
 	std::priority_queue<Pending, std::vector<Pending>, std::greater<Pending>> m_Pending;
 	std::mutex m_Mutex;
-	std::condition_variable m_Cv;
-	std::thread m_Worker;
-	std::atomic<bool> m_Stopped;
+	std::condition_variable_any m_Cv;
 
 	prometheus::Counter* m_TotalBytesSent = nullptr;
 	prometheus::Counter* m_TotalBytesReceived = nullptr;
 	prometheus::Counter* m_PacketsDropped = nullptr;
+
+	/* jthreads declared last so they're destructed first, while
+	   the resources they touch (m_Session, m_Cv etc.) are still alive */
+	std::jthread m_Worker;
+	std::jthread m_RecvThread;
 };
 
 } // namespace orla
