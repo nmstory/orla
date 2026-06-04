@@ -43,15 +43,12 @@ void JuntosAdapter::start(std::string hostname, uint16_t port) {
 	if (char *e = std::getenv("REORDER_PROB"))
 		config::REORDER_PROB = std::stod(e);
 
-	if (!m_Session) {
-		m_Session = std::make_unique<LinuxSession>();
-	}
 	// 200ms recv timeout so the recv thread can poll its stop_token.
-	m_Session->initSessionSolo(hostname, port, std::chrono::milliseconds(200));
+	m_Client.init(hostname, static_cast<int>(port), std::chrono::milliseconds(200));
 
 	m_RecvThread = std::jthread([this](std::stop_token st) {
 		while (!st.stop_requested()) {
-			auto [success, data, sender] = recvData(m_Session->getSocketFD());
+			auto [success, data, sender] = recvData(m_Client.getSocketFD());
 			if (!success || !m_RecvCallback) continue;
 
 			std::cout << "Received " << data.size() << std::endl;
@@ -89,7 +86,8 @@ void JuntosAdapter::initMetrics(prometheus::Registry& registry) {
 }
 
 Peer JuntosAdapter::setupPeer(const std::string &peer_addr, uint16_t port) {
-	return m_Session->setupPeer(peer_addr, port);
+	m_Client.addPeer(peer_addr, static_cast<int>(port));
+	return Peer(populateAddress(peer_addr.c_str(), static_cast<int>(port)));
 }
 
 void JuntosAdapter::workerLoop(std::stop_token st) {
@@ -108,8 +106,8 @@ void JuntosAdapter::workerLoop(std::stop_token st) {
 			Pending send_pkt = std::move(const_cast<Pending &>(m_Pending.top()));
 			m_Pending.pop();
 			lk.unlock();
-			if (m_Session) {
-				int sock = m_Session->getSocketFD();
+			{
+				auto sock = m_Client.getSocketFD();
 				std::span<const std::byte> payload(reinterpret_cast<const std::byte *>(send_pkt.buf.data()), send_pkt.buf.size());
 				char dest_ip[INET_ADDRSTRLEN];
 				inet_ntop(AF_INET, &send_pkt.addr.sin_addr, dest_ip, INET_ADDRSTRLEN);

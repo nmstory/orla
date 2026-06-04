@@ -1,26 +1,19 @@
 #pragma once
+#include "../external/juntos/include/client.h"
 #include "../external/juntos/include/network_handler.h"
-#include "../external/juntos/include/session_linux.h"
 #include "message.h"
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <prometheus/counter.h>
 #include <prometheus/registry.h>
 #include <queue>
 #include <random>
-#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <network_handler.h>
-#include <sys/socket.h>
 
 namespace orla {
 
@@ -50,7 +43,7 @@ class JuntosAdapter : public INetworkAdapter {
 	void workerLoop(std::stop_token st);
 
 	std::function<void(const Message &, const std::string &, uint16_t)> m_RecvCallback;
-	std::unique_ptr<LinuxSession> m_Session;
+	Client m_Client;
 
 	struct Pending {
 		std::chrono::steady_clock::time_point when;
