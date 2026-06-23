@@ -11,20 +11,20 @@ namespace orla {
 class Message;
 
 class EdgeNode : public NodeInterface {
-public:
-	explicit EdgeNode(prometheus::Registry& registry);
+  public:
+	explicit EdgeNode(prometheus::Registry &registry);
 
 	void run() override;
 
-private:
+  private:
 	void processWorkRequest(const Message &msg, Peer client);
 
 	JuntosAdapter m_Adapter;
 	std::vector<Peer> m_Clients;
 
-	prometheus::Counter* m_TasksCompleted = nullptr;
-	prometheus::Histogram* m_TaskDuration = nullptr;
-	prometheus::Gauge* m_ActiveClients = nullptr;
+	prometheus::Counter *m_TasksCompleted = nullptr;
+	prometheus::Histogram *m_TaskDuration = nullptr;
+	prometheus::Gauge *m_ActiveClients = nullptr;
 };
 
 } // namespace orla

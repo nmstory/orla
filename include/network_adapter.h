@@ -36,7 +36,7 @@ class JuntosAdapter : public INetworkAdapter {
 		std::function<void(const Message &, const std::string &, uint16_t)> callback) override;
 	void start(std::string hostname, uint16_t port) override;
 
-	void initMetrics(prometheus::Registry& registry);
+	void initMetrics(prometheus::Registry &registry);
 	Peer setupPeer(const std::string &peer_addr, uint16_t port);
 
   private:
@@ -56,9 +56,9 @@ class JuntosAdapter : public INetworkAdapter {
 	std::mutex m_Mutex;
 	std::condition_variable_any m_Cv;
 
-	prometheus::Counter* m_TotalBytesSent = nullptr;
-	prometheus::Counter* m_TotalBytesReceived = nullptr;
-	prometheus::Counter* m_PacketsDropped = nullptr;
+	prometheus::Counter *m_TotalBytesSent = nullptr;
+	prometheus::Counter *m_TotalBytesReceived = nullptr;
+	prometheus::Counter *m_PacketsDropped = nullptr;
 
 	/* jthreads declared last so they're destructed first, while
 	   the resources they touch (m_Session, m_Cv etc.) are still alive */

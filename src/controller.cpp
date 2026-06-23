@@ -10,18 +10,19 @@
 
 namespace orla {
 
-Controller::Controller(prometheus::Registry& registry) : NodeInterface(registry) {
+Controller::Controller(prometheus::Registry &registry) : NodeInterface(registry) {
 	m_ActiveEdges = &prometheus::BuildGauge()
-		.Name("active_edges")
-		.Help("The number of edges currently active within this session")
-		.Register(m_Registry).Add({});
+						 .Name("active_edges")
+						 .Help("The number of edges currently active within this session")
+						 .Register(m_Registry)
+						 .Add({});
 
-	auto& scaleFamily = prometheus::BuildCounter()
-		.Name("scaling_events_total")
-		.Help("Autoscaling events")
-		.Register(m_Registry);
+	auto &scaleFamily = prometheus::BuildCounter()
+							.Name("scaling_events_total")
+							.Help("Autoscaling events")
+							.Register(m_Registry);
 
-	m_ScaleUp   = &scaleFamily.Add({{"direction", "up"}});
+	m_ScaleUp = &scaleFamily.Add({{"direction", "up"}});
 	m_ScaleDown = &scaleFamily.Add({{"direction", "down"}});
 }
 
@@ -52,9 +53,10 @@ void Controller::run() {
 			auto it = getEdge(ip, port);
 			if (it != m_AliveEdges.end()) {
 				int64_t latencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::system_clock::now() - it->m_LastPingSentAt).count();
+										std::chrono::system_clock::now() - it->m_LastPingSentAt)
+										.count();
 				uint8_t clientCount = std::stoi(msg.payload());
-				it->m_Score     = config::LOAD_WEIGHT * clientCount + config::LATENCY_WEIGHT * latencyMs;
+				it->m_Score = config::LOAD_WEIGHT * clientCount + config::LATENCY_WEIGHT * latencyMs;
 				it->m_LastAckAt = std::chrono::system_clock::now();
 			}
 		} else if (msg.type() == MessageType::ClientConnectReqPing) {
@@ -75,10 +77,10 @@ void Controller::run() {
 				uint16_t edge_port = ntohs(best_peer->sendAddr.sin_port);
 
 				Message response = Message::Builder()
-					.type(MessageType::ClientConnectReqPong)
-					.payload(std::string(ip_buf) + ":" + std::to_string(edge_port))
-					.sequence(msg.sequence())
-					.build();
+									   .type(MessageType::ClientConnectReqPong)
+									   .payload(std::string(ip_buf) + ":" + std::to_string(edge_port))
+									   .sequence(msg.sequence())
+									   .build();
 				m_Adapter.enqueue(response, m_Adapter.setupPeer(ip, port));
 			} else {
 				std::cerr << "[Controller] No known edges to allocate client to." << std::endl;
@@ -87,7 +89,8 @@ void Controller::run() {
 	});
 
 	uint16_t port = 4000;
-	if (char *e = std::getenv("PORT")) port = std::atoi(e);
+	if (char *e = std::getenv("PORT"))
+		port = std::atoi(e);
 	m_Adapter.start("0.0.0.0", port);
 	std::cout << "[Controller] Listening on port " << port << std::endl;
 
@@ -137,9 +140,11 @@ void Controller::spawnEdge() {
 	uint16_t port = m_NextEdgePort++;
 	std::string name = "edge-" + std::to_string(port - 4000);
 	std::string cmd = "docker run -d --network orla_orla_net "
-					  "--name " + name + " "
-					  "--label orla.role=edge "
-					  "-e ROLE=edge -e PORT=" + std::to_string(port) +
+					  "--name " +
+					  name + " "
+							 "--label orla.role=edge "
+							 "-e ROLE=edge -e PORT=" +
+					  std::to_string(port) +
 					  " -e PROMETHEUS_PORT=9101 orla:latest";
 	std::cout << "[Controller] Spawning edge on port " << port << "..." << std::endl;
 	std::thread([cmd, port]() {
@@ -165,11 +170,13 @@ void Controller::killEdge(std::vector<Edge>::iterator it) {
 }
 
 void Controller::checkScaleDown() {
-	if (m_AliveEdges.size() <= 1) return;
+	if (m_AliveEdges.size() <= 1)
+		return;
 	bool allIdle = std::all_of(m_AliveEdges.begin(), m_AliveEdges.end(), [](const Edge &e) {
 		return e.m_Score < config::SCALE_DOWN_THRESHOLD;
 	});
-	if (!allIdle) return;
+	if (!allIdle)
+		return;
 	auto it = std::min_element(m_AliveEdges.begin(), m_AliveEdges.end(), [](const Edge &a, const Edge &b) {
 		return a.m_Score < b.m_Score;
 	});

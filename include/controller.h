@@ -14,10 +14,10 @@ struct Edge {
 	Edge(Peer peer) : m_Peer(std::move(peer)) {}
 	Edge(const Edge &) = default;
 	Edge &operator=(Edge &&other) noexcept {
-		m_Peer           = std::move(other.m_Peer);
-		m_Score          = other.m_Score;
+		m_Peer = std::move(other.m_Peer);
+		m_Score = other.m_Score;
 		m_LastPingSentAt = std::move(other.m_LastPingSentAt);
-		m_LastAckAt      = std::move(other.m_LastAckAt);
+		m_LastAckAt = std::move(other.m_LastAckAt);
 		return *this;
 	}
 
@@ -29,7 +29,7 @@ struct Edge {
 
 class Controller : public NodeInterface {
   public:
-	explicit Controller(prometheus::Registry& registry);
+	explicit Controller(prometheus::Registry &registry);
 
 	void run() override;
 
@@ -45,9 +45,9 @@ class Controller : public NodeInterface {
 	std::vector<Edge> m_AliveEdges{};
 	uint16_t m_NextEdgePort = 4001;
 
-	prometheus::Gauge* m_ActiveEdges = nullptr;
-	prometheus::Counter* m_ScaleUp = nullptr;
-	prometheus::Counter* m_ScaleDown = nullptr;
+	prometheus::Gauge *m_ActiveEdges = nullptr;
+	prometheus::Counter *m_ScaleUp = nullptr;
+	prometheus::Counter *m_ScaleDown = nullptr;
 
 	mutable std::mutex m_EdgesMutex;
 };

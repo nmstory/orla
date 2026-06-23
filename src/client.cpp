@@ -13,7 +13,8 @@ void Client::run() {
 	m_Adapter.initMetrics(m_Registry);
 
 	uint16_t port = 4002; // init to default
-	if (char *e = std::getenv("PORT")) port = std::atoi(e);
+	if (char *e = std::getenv("PORT"))
+		port = std::atoi(e);
 	m_Adapter.start("0.0.0.0", port);
 	std::cout << "[Client] Started on port " << port << std::endl;
 
@@ -34,8 +35,7 @@ void Client::run() {
 			uint16_t edge_port = std::stoi(payload.substr(colon + 1));
 
 			m_WorkerEdge = new Peer(m_Adapter.setupPeer(edge_ip, edge_port));
-		}
-		else if (msg.type() == MessageType::ClientWorkResult) {
+		} else if (msg.type() == MessageType::ClientWorkResult) {
 			WorkResult result;
 			std::memcpy(&result, msg.payload().data(), sizeof(result));
 			std::cout << "[Client] Work complete task_id=" << result.task_id << std::endl;
@@ -48,9 +48,9 @@ void Client::run() {
 			sendWorkRequest(seq++);
 		} else {
 			Message msg = Message::Builder()
-				.type(MessageType::ClientConnectReqPing)
-				.sequence(seq++)
-				.build();
+							  .type(MessageType::ClientConnectReqPing)
+							  .sequence(seq++)
+							  .build();
 			m_Adapter.enqueue(msg, controller);
 			std::cout << "[Client] Sent ping to controller" << std::endl;
 		}
@@ -64,10 +64,10 @@ void Client::sendWorkRequest(int seq) {
 	std::memcpy(payload.data(), &req, sizeof(req));
 
 	Message msg = Message::Builder()
-		.type(MessageType::ClientWorkRequest)
-		.payload(std::move(payload))
-		.sequence(seq)
-		.build();
+					  .type(MessageType::ClientWorkRequest)
+					  .payload(std::move(payload))
+					  .sequence(seq)
+					  .build();
 	m_Adapter.enqueue(msg, *m_WorkerEdge);
 	std::cout << "[Client] Sent work request task_id=" << req.task_id
 			  << " duration_ms=" << req.duration_ms << std::endl;
