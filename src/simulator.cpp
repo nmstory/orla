@@ -10,7 +10,7 @@ namespace orla {
 
 int Simulator::init() {
 	uint16_t promPort = 9100;
-	if (const char* p = std::getenv("PROMETHEUS_PORT"))
+	if (const char *p = std::getenv("PROMETHEUS_PORT"))
 		promPort = static_cast<uint16_t>(std::stoi(p));
 	m_Metrics = std::make_unique<MetricsRegistry>(promPort);
 

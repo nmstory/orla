@@ -13,13 +13,14 @@ void JuntosAdapter::enqueue(const Message &msg, const Peer &peer) {
 	thread_local std::uniform_real_distribution<double> dist01(0.0, 1.0);
 
 	if (dist01(rng) < config::LOSS_RATE) {
-		if (m_PacketsDropped) m_PacketsDropped->Increment();
+		if (m_PacketsDropped)
+			m_PacketsDropped->Increment();
 		return;
 	}
 
 	int ms = config::MAX_LATENCY_MS > 0
-		? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(rng)
-		: 0;
+				 ? std::uniform_int_distribution<int>(0, config::MAX_LATENCY_MS)(rng)
+				 : 0;
 	auto deliver_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
 
 	auto buf = msg.serialize();
@@ -49,7 +50,8 @@ void JuntosAdapter::start(std::string hostname, uint16_t port) {
 	m_RecvThread = std::jthread([this](std::stop_token st) {
 		while (!st.stop_requested()) {
 			auto [success, data, sender] = recvData(m_Client.getSocketFD());
-			if (!success || !m_RecvCallback) continue;
+			if (!success || !m_RecvCallback)
+				continue;
 
 			std::cout << "Received " << data.size() << std::endl;
 			try {
@@ -58,7 +60,8 @@ void JuntosAdapter::start(std::string hostname, uint16_t port) {
 				inet_ntop(AF_INET, &(sender.sin_addr), ip, INET_ADDRSTRLEN);
 				uint16_t sender_port = ntohs(sender.sin_port);
 				m_RecvCallback(msg, std::string(ip), sender_port);
-				if (m_TotalBytesReceived) m_TotalBytesReceived->Increment(data.size());
+				if (m_TotalBytesReceived)
+					m_TotalBytesReceived->Increment(data.size());
 			} catch (const std::exception &e) {
 				std::cerr << "Deserialise failed: " << e.what() << std::endl;
 			}
@@ -68,21 +71,24 @@ void JuntosAdapter::start(std::string hostname, uint16_t port) {
 	m_Worker = std::jthread([this](std::stop_token st) { this->workerLoop(st); });
 }
 
-void JuntosAdapter::initMetrics(prometheus::Registry& registry) {
+void JuntosAdapter::initMetrics(prometheus::Registry &registry) {
 	m_TotalBytesSent = &prometheus::BuildCounter()
-		.Name("bytes_sent_total")
-		.Help("Total bytes sent")
-		.Register(registry).Add({});
+							.Name("bytes_sent_total")
+							.Help("Total bytes sent")
+							.Register(registry)
+							.Add({});
 
 	m_TotalBytesReceived = &prometheus::BuildCounter()
-		.Name("bytes_received_total")
-		.Help("Total bytes received")
-		.Register(registry).Add({});
+								.Name("bytes_received_total")
+								.Help("Total bytes received")
+								.Register(registry)
+								.Add({});
 
 	m_PacketsDropped = &prometheus::BuildCounter()
-		.Name("bytes_dropped_total")
-		.Help("Total packets dropped due to simulated loss")
-		.Register(registry).Add({});
+							.Name("bytes_dropped_total")
+							.Help("Total packets dropped due to simulated loss")
+							.Register(registry)
+							.Add({});
 }
 
 Peer JuntosAdapter::setupPeer(const std::string &peer_addr, uint16_t port) {
@@ -95,7 +101,8 @@ void JuntosAdapter::workerLoop(std::stop_token st) {
 	while (!st.stop_requested()) {
 		if (m_Pending.empty()) {
 			m_Cv.wait(lk, st, [this] { return !m_Pending.empty(); });
-			if (st.stop_requested()) break;
+			if (st.stop_requested())
+				break;
 		}
 
 		auto &pkt = m_Pending.top();
@@ -112,10 +119,11 @@ void JuntosAdapter::workerLoop(std::stop_token st) {
 				char dest_ip[INET_ADDRSTRLEN];
 				inet_ntop(AF_INET, &send_pkt.addr.sin_addr, dest_ip, INET_ADDRSTRLEN);
 				std::cout << "[Worker] Sending " << payload.size() << " bytes to "
-						<< dest_ip << ":" << ntohs(send_pkt.addr.sin_port)
-						<< " on sock " << sock << std::endl;
+						  << dest_ip << ":" << ntohs(send_pkt.addr.sin_port)
+						  << " on sock " << sock << std::endl;
 				sendData<int>(sock, send_pkt.addr, payload, payload.size());
-				if (m_TotalBytesSent) m_TotalBytesSent->Increment(send_pkt.buf.size());
+				if (m_TotalBytesSent)
+					m_TotalBytesSent->Increment(send_pkt.buf.size());
 			}
 			lk.lock();
 		}

@@ -10,16 +10,16 @@ enum class MessageType : uint8_t { Invalid = 0,
 								   ClientWorkResult,
 								   Data,
 								   Heartbeat,
-								   HeartbeatAck};
+								   HeartbeatAck };
 
 #pragma pack(push, 1)
 struct WorkRequest {
-	const uint32_t task_id;      // client-assigned, for correlation
-	const uint32_t duration_ms;  // simulated compute time
+	const uint32_t task_id;		// client-assigned, for correlation
+	const uint32_t duration_ms; // simulated compute time
 };
 
 struct WorkResult {
-	uint32_t task_id;      // echoed back from WorkRequest
+	uint32_t task_id; // echoed back from WorkRequest
 };
 #pragma pack(pop)
 
