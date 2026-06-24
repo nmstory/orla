@@ -33,9 +33,8 @@ jobs:
     - name: Build
       run: cmake --build build --config Release --parallel
 
-    # Uncomment once tests are added via add_test() / enable_testing() in CMake:
-    # - name: Test
-    #   run: ctest --test-dir build --build-config Release --output-on-failure
+    - name: Test
+      run: ctest --test-dir build --build-config Release --output-on-failure
 
   sanitize:
     name: Sanitizers
@@ -60,12 +59,11 @@ jobs:
     - name: Build
       run: cmake --build build-san --parallel
 
-    # Uncomment once tests are added via add_test() / enable_testing() in CMake:
-    # - name: Test
-    #   run: ctest --test-dir build-san --output-on-failure
-    #   env:
-    #     ASAN_OPTIONS: halt_on_error=1:detect_leaks=1
-    #     UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    - name: Test
+      run: ctest --test-dir build-san --output-on-failure
+      env:
+        ASAN_OPTIONS: halt_on_error=1:detect_leaks=1
+        UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
 
   lint:
     name: Lint
