@@ -71,12 +71,20 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-    - name: Install clang-format
-      run: sudo apt-get update && sudo apt-get install -y clang-format
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y zlib1g-dev clang-format clang-tidy
 
     - name: Check formatting
       run: find src include -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
+
+    - name: Configure (generate compile_commands.json)
+      run: cmake -B build-lint -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug
+
+    - name: Run clang-tidy
+      run: find src -name '*.cpp' | xargs clang-tidy -p build-lint
 
   docker:
     name: Docker
