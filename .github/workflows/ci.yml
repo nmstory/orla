@@ -17,7 +17,7 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+      run: sudo apt-get install -y zlib1g-dev
 
     - name: Cache CMake build
       uses: actions/cache@v4
@@ -33,9 +33,36 @@ jobs:
     - name: Build
       run: cmake --build build --config Release --parallel
 
-    # Uncomment once tests are added via add_test() / enable_testing() in CMake:
-    # - name: Test
-    #   run: ctest --test-dir build --build-config Release --output-on-failure
+    - name: Test
+      run: ctest --test-dir build --build-config Release --output-on-failure
+
+  sanitize:
+    name: Sanitizers (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: sudo apt-get install -y zlib1g-dev
+
+    - name: Configure
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+    - name: Build
+      run: cmake --build build --parallel
+
+    - name: Test
+      env:
+        ASAN_OPTIONS: halt_on_error=1:detect_leaks=1
+        UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      run: ctest --test-dir build --output-on-failure
 
   lint:
     name: Lint
@@ -43,12 +70,36 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-    - name: Install clang-format
-      run: sudo apt-get update && sudo apt-get install -y clang-format
+    - name: Install dependencies
+      run: |
+        sudo apt-get install -y zlib1g-dev clang-tidy wget gnupg
+        sudo wget -qO /usr/share/keyrings/llvm-snapshot.gpg.key \
+          https://apt.llvm.org/llvm-snapshot.gpg.key
+        echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] \
+          http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" \
+          | sudo tee /etc/apt/sources.list.d/llvm.list
+        sudo apt-get update || true
+        sudo apt-get install -y clang-format-19
 
     - name: Check formatting
-      run: find src include -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
+      run: |
+        find src include tests \( -name '*.cpp' -o -name '*.h' \) \
+          | xargs clang-format-19 --dry-run --Werror
+
+    - name: Configure (for compile_commands.json)
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: clang-tidy
+      run: |
+        clang-tidy -p build \
+          --header-filter='(src|include|tests)/.*' \
+          $(find src tests -name '*.cpp')
 
   docker:
     name: Docker
